@@ -21,6 +21,8 @@ export const metadata: Metadata = {
   keywords: "medicine safety, drug interactions, AI healthcare, ayurvedic medicine, prescription scanner",
 };
 
+import { AuthProvider } from "@/components/providers/AuthProvider";
+
 export default function RootLayout({
   children,
 }: {
@@ -35,7 +37,9 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-surface text-on-surface font-inter min-h-screen">
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
