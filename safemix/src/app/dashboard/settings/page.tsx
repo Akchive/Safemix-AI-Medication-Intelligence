@@ -230,6 +230,8 @@ function PrivacyPanel({ uid, onAccountDeleted }: { uid: string | null; onAccount
   const [abdmError, setAbdmError] = useState<string | null>(null);
   const [abdmItems, setAbdmItems] = useState<Array<Record<string, any>>>([]);
   const [abdmWarning, setAbdmWarning] = useState<string | null>(null);
+  const [fhirLoading, setFhirLoading] = useState(false);
+  const [fhirMsg, setFhirMsg] = useState<string | null>(null);
 
   const handleExport = async () => {
     if (!uid) return;
@@ -312,6 +314,51 @@ function PrivacyPanel({ uid, onAccountDeleted }: { uid: string | null; onAccount
     }
   };
 
+  const handleFhirExport = async () => {
+    if (!uid) return;
+    setFhirLoading(true);
+    setFhirMsg(null);
+    try {
+      const res = await fetch(`/api/fhir/export?uid=${encodeURIComponent(uid)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "FHIR export failed");
+      const blob = new Blob([JSON.stringify(json.bundle, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `safemix-fhir-export-${uid.slice(0, 8)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setFhirMsg("FHIR export downloaded.");
+    } catch (e) {
+      setFhirMsg((e as Error).message);
+    } finally {
+      setFhirLoading(false);
+    }
+  };
+
+  const handleFhirImport = async (file?: File | null) => {
+    if (!uid || !file) return;
+    setFhirLoading(true);
+    setFhirMsg(null);
+    try {
+      const text = await file.text();
+      const bundle = JSON.parse(text);
+      const res = await fetch("/api/fhir/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid, bundle }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "FHIR import failed");
+      setFhirMsg(`FHIR import complete: ${json.imported} medicines mapped.`);
+    } catch (e) {
+      setFhirMsg((e as Error).message);
+    } finally {
+      setFhirLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
       <div>
@@ -354,6 +401,28 @@ function PrivacyPanel({ uid, onAccountDeleted }: { uid: string | null; onAccount
             ))}
           </div>
         )}
+      </div>
+
+      <div className="rounded-2xl border border-[#e0e8e2] bg-[#F8F8F4] p-5 space-y-3">
+        <div>
+          <h3 className="font-bold text-[#1a2820]">FHIR Import / Export (Mock)</h3>
+          <p className="text-xs text-[#7a9080] mt-0.5">Use this until ABDM live credentials are available.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={handleFhirExport} disabled={!uid || fhirLoading} className="px-4 py-2 rounded-xl bg-[#42594A] text-white text-sm font-semibold disabled:opacity-50">
+            {fhirLoading ? "Working..." : "Download FHIR Export"}
+          </button>
+          <label className="px-4 py-2 rounded-xl border border-[#d7e0d9] bg-white text-sm font-semibold cursor-pointer">
+            Upload FHIR Bundle
+            <input
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={(e) => handleFhirImport(e.target.files?.[0])}
+            />
+          </label>
+        </div>
+        {fhirMsg && <p className="text-xs text-[#42594A]">{fhirMsg}</p>}
       </div>
 
       {/* Export */}

@@ -37,12 +37,16 @@ export default function AnalyticsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<14 | 30 | 90>(30);
   const [severity, setSeverity] = useState<SeverityFilter>("all");
+  const [abdmMetrics, setAbdmMetrics] = useState<{ counts: Record<string, number>; auditCounts24h: Record<string, number>; total: number } | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
         const data = await fetchRecentVerdicts(5000);
         setSamples(data);
+        const mRes = await fetch("/api/abdm/ops/metrics");
+        const mJson = await mRes.json();
+        if (mRes.ok) setAbdmMetrics({ counts: mJson.counts ?? {}, auditCounts24h: mJson.auditCounts24h ?? {}, total: mJson.total ?? 0 });
       } finally {
         setLoading(false);
       }
@@ -112,6 +116,27 @@ export default function AnalyticsAdminPage() {
         </div>
       ) : (
         <>
+          <div className="bg-white border border-[#e0e8e2] rounded-3xl p-5 space-y-3">
+            <h2 className="font-bold text-[#1a2820] text-sm">ABDM Ops Panel</h2>
+            <p className="text-xs text-[#7a9080]">Queue/replay/callback operational snapshot.</p>
+            {abdmMetrics ? (
+              <div className="grid md:grid-cols-3 gap-3 text-sm">
+                <div className="p-3 rounded-xl bg-[#F8F8F4] border border-[#e0e8e2]">
+                  <p className="text-xs text-[#7a9080]">Total consent docs</p>
+                  <p className="font-bold text-[#1a2820]">{abdmMetrics.total}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-[#F8F8F4] border border-[#e0e8e2]">
+                  <p className="text-xs text-[#7a9080]">Queued (`local_requested`)</p>
+                  <p className="font-bold text-[#1a2820]">{abdmMetrics.counts.local_requested ?? 0}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-[#F8F8F4] border border-[#e0e8e2]">
+                  <p className="text-xs text-[#7a9080]">Gateway errors</p>
+                  <p className="font-bold text-[#C41C00]">{abdmMetrics.counts.gateway_error ?? 0}</p>
+                </div>
+              </div>
+            ) : <p className="text-xs text-[#9ab0a0]">Metrics unavailable.</p>}
+          </div>
+
           <div className="bg-white border border-[#e0e8e2] rounded-3xl p-5 space-y-3">
             <h2 className="font-bold text-[#1a2820] text-sm flex items-center gap-2">
               <MapPin className="w-4 h-4 text-[#5E7464]" /> Panel 4 · Geography of interaction events
