@@ -114,9 +114,9 @@ export default function AnalyticsAdminPage() {
         <>
           <div className="bg-white border border-[#e0e8e2] rounded-3xl p-5 space-y-3">
             <h2 className="font-bold text-[#1a2820] text-sm flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-[#5E7464]" /> Panel 4 · Geography of interaction events
+              <MapPin className="w-4 h-4 text-[#5E7464]" /> Panel 4 Â· Geography of interaction events
             </h2>
-            <p className="text-xs text-[#7a9080]">State-level distribution. States below k-anonymity are folded into “Other”.</p>
+            <p className="text-xs text-[#7a9080]">State-level distribution. States below k-anonymity are folded into â€œOtherâ€.</p>
             <ResponsiveContainer width="100%" height={Math.max(260, states.length * 34)}>
               <BarChart data={states} layout="vertical" margin={{ left: 10, right: 16, top: 8, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f1" />
@@ -133,7 +133,7 @@ export default function AnalyticsAdminPage() {
 
           <div className="bg-white border border-[#e0e8e2] rounded-3xl p-5 space-y-3">
             <h2 className="font-bold text-[#1a2820] text-sm flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-[#5E7464]" /> Panel 5 · DAU / WAU / MAU
+              <TrendingUp className="w-4 h-4 text-[#5E7464]" /> Panel 5 Â· DAU / WAU / MAU
             </h2>
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={retention} margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
