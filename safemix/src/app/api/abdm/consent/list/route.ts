@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
     if (!uid) return NextResponse.json({ error: "uid required" }, { status: 400 });
     const db = getAdminDb();
     const snap = await db.collection("users").doc(uid).collection("abdm_consents").orderBy("createdAt", "desc").limit(10).get();
+    await db.collection("audits").add({ createdAt: Date.now(), action: "abdm_consent_list", uid, count: snap.size });
     return NextResponse.json({
       ok: true,
       items: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
@@ -15,4 +16,3 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
-

@@ -81,9 +81,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    await db.collection("audits").add({ createdAt: Date.now(), action: "abdm_consent_replay", total: queuedSnap.size, success, failed });
     return NextResponse.json({ ok: true, total: queuedSnap.size, success, failed, results });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
-

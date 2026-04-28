@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
 
     const db = getAdminDb();
     await db.collection("users").doc(uid).collection("abdm_consents").doc(requestId).set(payload, { merge: true });
+    await db.collection("audits").add({ createdAt: Date.now(), action: "abdm_consent_request", uid, requestId, status: payload.status });
 
     if (!cfg.enabled) {
       await db.collection("users").doc(uid).collection("abdm_consents").doc(requestId).set(
