@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Database, GitBranch, Megaphone, Cpu, FileText, Settings, Users } from "lucide-react";
+import { Database, GitBranch, Megaphone, Cpu, FileText, Settings, Users, BarChart3 } from "lucide-react";
 
 const items = [
   { href: "/admin",                 label: "Medicine DB",      icon: Database, exact: true },
   { href: "/admin/interactions",    label: "Interaction Graph", icon: GitBranch },
   { href: "/admin/ai-review-queue", label: "AI Review Queue",   icon: Cpu },
   { href: "/admin/adr-review",      label: "ADR Reports",       icon: FileText },
+  { href: "/admin/analytics",       label: "Analytics",         icon: BarChart3 },
   { href: "/admin/content",         label: "Content & Notif.",  icon: Megaphone },
   { href: "/admin/users",           label: "Users",             icon: Users },
   { href: "/admin/settings",        label: "Feature Flags",     icon: Settings },
