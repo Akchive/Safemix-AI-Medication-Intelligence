@@ -1,33 +1,38 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { AlertTriangle, CheckCircle, AlertCircle, Clock, Shield, Pill, XCircle, Printer, Download } from "lucide-react";
+import {
+  AlertTriangle, CheckCircle, AlertCircle, Clock, Shield, XCircle,
+  Printer, Download, Send, ChevronDown, ChevronUp, Loader2,
+} from "lucide-react";
 import Link from "next/link";
 import { verifyDoctorToken } from "@/lib/qrToken";
-
-// Medicine data that would come from Firestore in production
-const DEMO_REGIMEN = [
-  { name: "Metformin 500mg", system: "Allopathic", dosage: "500mg", frequency: "Twice daily", timing: "After meals" },
-  { name: "Lisinopril 10mg", system: "Allopathic", dosage: "10mg", frequency: "Once daily", timing: "Morning" },
-  { name: "Karela (Bitter Gourd) Juice", system: "Ayurvedic", dosage: "30ml", frequency: "Once daily", timing: "Empty stomach" },
-  { name: "Ashwagandha", system: "Herbal", dosage: "1 capsule", frequency: "Once daily", timing: "Night" },
-];
-
-const DEMO_ALERTS = [
-  { verdict: "red" as const, pair: "Metformin + Karela Juice", reason: "Both lower blood glucose — combined use may cause hypoglycemia. Monitor blood sugar closely." },
-  { verdict: "yellow" as const, pair: "Lisinopril + Ashwagandha", reason: "Ashwagandha may mildly lower blood pressure. Combination may potentiate hypotensive effects." },
-];
+import {
+  readPatientSnapshot, acknowledgeSnapshot, type PatientSnapshot,
+} from "@/lib/firebase/firestore";
+import type { CachedVerdict } from "@/lib/interactionCache";
+import type { RegimenMedicine } from "@/lib/regimen";
 
 const systemColor: Record<string, string> = {
-  "Allopathic": "#3B82F6",
-  "Ayurvedic": "#10B981",
-  "Herbal": "#8B5CF6",
-  "OTC": "#F59E0B",
-  "Supplement": "#06B6D4",
+  "Allopathic":   "#3B82F6",
+  "Ayurvedic":    "#10B981",
+  "Herbal":       "#8B5CF6",
+  "Herbal / Plant-based": "#8B5CF6",
+  "OTC":          "#F59E0B",
+  "Supplement":   "#06B6D4",
+  "Homeopathic":  "#EC4899",
+  "Home Remedy":  "#6B7280",
+};
+
+const verdictConfig = {
+  red:    { bg: "#FFF1F0", border: "#FFCCC7", text: "#C41C00", label: "HIGH RISK", icon: "❗" },
+  yellow: { bg: "#FFFBE6", border: "#FFE58F", text: "#875400", label: "CAUTION", icon: "⚠️" },
+  green:  { bg: "#F6FFED", border: "#B7EB8F", text: "#237804", label: "SAFE", icon: "✓" },
 };
 
 interface TokenPayload {
   uid: string;
+  jti?: string;
   expiry: number;
   issued: number;
 }
@@ -39,157 +44,102 @@ export default function DoctorPortalScanPage() {
 
   const [status, setStatus] = useState<"loading" | "valid" | "expired" | "revoked" | "invalid">("loading");
   const [payload, setPayload] = useState<TokenPayload | null>(null);
+  const [snapshot, setSnapshot] = useState<PatientSnapshot | null>(null);
   const [timeLeft, setTimeLeft] = useState("");
-  const [downloading, setDownloading] = useState(false);
+  const [showClinical, setShowClinical] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    if (!token) { setStatus("invalid"); return; }
+  // Acknowledgement
+  const [ackNote, setAckNote] = useState("");
+  const [ackName, setAckName] = useState("");
+  const [ackSent, setAckSent] = useState(false);
+  const [ackSending, setAckSending] = useState(false);
 
-    // Helper: check if this token is in the revoked list
-    const isRevoked = () => {
+  const isRevoked = (t: string) => {
+    try {
       const revoked: string[] = JSON.parse(localStorage.getItem("safemix_revoked_tokens") || "[]");
-      return revoked.includes(token);
-    };
+      return revoked.includes(t);
+    } catch { return false; }
+  };
 
-    // 1. Check revocation registry immediately on load
-    if (isRevoked()) { setStatus("revoked"); return; }
-
-    // 2. Verify JWT signature + expiry
-    verifyDoctorToken(decodeURIComponent(token))
-      .then((jwtPayload) => {
-        const decoded: TokenPayload = {
-          uid: jwtPayload.uid,
-          expiry: jwtPayload.expiry,
-          issued: jwtPayload.issued,
-        };
-        setPayload(decoded);
-
-        if (Date.now() > decoded.expiry) {
-          setStatus("expired");
-          return;
-        }
-
-        setStatus("valid");
-
-        // 3. Listen for cross-tab revocation in real time
-        const handleStorage = (e: StorageEvent) => {
-          if (e.key === "safemix_revoked_tokens" && isRevoked()) {
-            setStatus("revoked");
-          }
-        };
-        window.addEventListener("storage", handleStorage);
-        // Return cleanup — but can't return from .then, so store in a variable
-      })
-      .catch(() => {
-        // JWT verification failed — token is invalid or tampered
-        setStatus("invalid");
-      });
-  }, [token]);
-
-  // Storage event listener for real-time revocation (set up separately)
+  // Listen for real-time revocation
   useEffect(() => {
-    if (status !== "valid" || !token) return;
-    const isRevoked = () => {
-      const revoked: string[] = JSON.parse(localStorage.getItem("safemix_revoked_tokens") || "[]");
-      return revoked.includes(token);
-    };
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === "safemix_revoked_tokens" && isRevoked()) setStatus("revoked");
+      if (e.key === "safemix_revoked_tokens" && token && isRevoked(token)) {
+        setStatus("revoked");
+      }
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, [status, token]);
+  }, [token]);
 
-  // Live countdown — runs on mount and ticks every second
+  // Verify JWT + load snapshot
   useEffect(() => {
-    if (status !== "valid" || !payload) return;
+    if (!token) { setStatus("invalid"); return; }
+    if (isRevoked(token)) { setStatus("revoked"); return; }
 
-    const formatRemaining = (ms: number) => {
-      const h = Math.floor(ms / 3600000);
-      const m = Math.floor((ms % 3600000) / 60000);
-      const s = Math.floor((ms % 60000) / 1000);
-      if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
-      return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    };
+    (async () => {
+      try {
+        const decoded = await verifyDoctorToken(token);
+        if (Date.now() >= decoded.expiry) { setStatus("expired"); return; }
 
-    // Set immediately so there's no empty flash
-    const initial = payload.expiry - Date.now();
-    if (initial <= 0) { setStatus("expired"); return; }
-    setTimeLeft(formatRemaining(initial));
+        setPayload(decoded);
+        setStatus("valid");
 
-    const interval = setInterval(() => {
-      const remaining = payload.expiry - Date.now();
-      if (remaining <= 0) {
-        setStatus("expired");
-        clearInterval(interval);
-        return;
-      }
-      setTimeLeft(formatRemaining(remaining));
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [status, payload]);
-
-  // ── Print ────────────────────────────────────────────────────────────────────
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // ── Download PDF (uses browser print-to-PDF) ─────────────────────────────────
-  const handleDownloadPDF = async () => {
-    setDownloading(true);
-    try {
-      // Use a hidden iframe to trigger print-to-PDF with a pre-set filename hint
-      const style = document.createElement("style");
-      style.id = "safemix-print-style";
-      style.textContent = `
-        @media print {
-          @page { size: A4; margin: 20mm; }
-          body > *:not(#safemix-print-root) { display: none !important; }
-          #safemix-print-root { display: block !important; }
+        // Load real patient snapshot from Firestore
+        if (decoded.jti) {
+          const snap = await readPatientSnapshot(decoded.jti);
+          setSnapshot(snap);
         }
-      `;
-      document.head.appendChild(style);
-      
-      // Set document title so the PDF filename is meaningful
-      const prev = document.title;
-      document.title = `SafeMix_Patient_Report_${payload?.uid?.slice(0, 8) || "report"}.pdf`;
-      window.print();
-      document.title = prev;
-      document.head.removeChild(style);
+
+        // Start countdown
+        const tick = () => {
+          const ms = decoded.expiry - Date.now();
+          if (ms <= 0) { setStatus("expired"); return; }
+          const h = Math.floor(ms / 3600000);
+          const m = Math.floor((ms % 3600000) / 60000);
+          const s = Math.floor((ms % 60000) / 1000);
+          setTimeLeft(h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`);
+        };
+        tick();
+        const id = setInterval(tick, 1000);
+        return () => clearInterval(id);
+      } catch {
+        setStatus("invalid");
+      }
+    })();
+  }, [token]);
+
+  const handleAcknowledge = async () => {
+    if (!payload?.jti || !ackName.trim()) return;
+    setAckSending(true);
+    try {
+      await acknowledgeSnapshot(payload.jti, ackNote.trim(), ackName.trim() || "Doctor");
+      setAckSent(true);
+    } catch (err) {
+      console.error("Acknowledge failed:", err);
     } finally {
-      setDownloading(false);
+      setAckSending(false);
     }
   };
 
-  const verdictConfig = {
-    red: { bg: "#FFF1F0", border: "#FFCCC7", text: "#C41C00", iconBg: "#FFCCC7", icon: AlertTriangle },
-    yellow: { bg: "#FFFBE6", border: "#FFE58F", text: "#875400", iconBg: "#FFE58F", icon: AlertCircle },
-    green: { bg: "#F6FFED", border: "#B7EB8F", text: "#237804", iconBg: "#B7EB8F", icon: CheckCircle },
+  const handlePrint = () => window.print();
+  const handleDownload = () => {
+    const content = printRef.current?.innerText || "";
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `safemix-report-${Date.now()}.txt`; a.click();
+    URL.revokeObjectURL(url);
   };
+
+  // ─── Status screens ───────────────────────────────────────────────────────────
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAF8]">
-        <div className="w-10 h-10 rounded-full border-4 border-[#5E7464] border-t-transparent animate-spin" />
-      </div>
-    );
-  }
-
-  if (status === "revoked") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAF8] dark:bg-[#0f1410] p-4">
-        <div className="max-w-sm w-full bg-white dark:bg-[#1e2820] rounded-3xl border border-[#e0e8e2] dark:border-white/10 p-8 text-center space-y-5 shadow-2xl">
-          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto">
-            <XCircle className="w-8 h-8 text-red-600" />
-          </div>
-          <h2 className="font-manrope font-bold text-xl text-[#1a2820] dark:text-white">Access Revoked</h2>
-          <p className="text-sm text-[#7a9080]">
-            The patient has revoked access to this report. Ask them to generate a new QR code if you still need to review their medications.
-          </p>
-          <Link href="/" className="block w-full py-3 text-sm font-semibold rounded-xl bg-[#42594A] text-white text-center">
-            Go to SafeMix
-          </Link>
+      <div className="min-h-screen bg-[#F4F7F5] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-12 h-12 border-2 border-[#5E7464] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-[#7a9080] font-medium">Verifying secure token…</p>
         </div>
       </div>
     );
@@ -197,16 +147,27 @@ export default function DoctorPortalScanPage() {
 
   if (status === "expired") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAF8] dark:bg-[#0f1410] p-4">
-        <div className="max-w-sm w-full bg-white dark:bg-[#1e2820] rounded-3xl border border-[#e0e8e2] dark:border-white/10 p-8 text-center space-y-5 shadow-2xl">
-          <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
-            <Clock className="w-8 h-8 text-amber-600" />
+      <div className="min-h-screen bg-[#F4F7F5] flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-sm space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-full bg-orange-100 flex items-center justify-center">
+            <Clock className="w-8 h-8 text-orange-500" />
           </div>
-          <h2 className="font-manrope font-bold text-xl text-[#1a2820] dark:text-white">QR Code Expired</h2>
-          <p className="text-sm text-[#7a9080]">This secure link has expired. Ask the patient to generate a new QR code from their SafeMix app.</p>
-          <Link href="/" className="block w-full py-3 text-sm font-semibold rounded-xl bg-[#42594A] text-white text-center">
-            Go to SafeMix
-          </Link>
+          <h2 className="font-bold text-xl text-[#1a2820]">Access Expired</h2>
+          <p className="text-sm text-[#7a9080]">This QR code has expired. Ask your patient to generate a new one.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "revoked") {
+    return (
+      <div className="min-h-screen bg-[#F4F7F5] flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-sm space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-full bg-red-100 flex items-center justify-center">
+            <XCircle className="w-8 h-8 text-red-500" />
+          </div>
+          <h2 className="font-bold text-xl text-[#1a2820]">Access Revoked</h2>
+          <p className="text-sm text-[#7a9080]">The patient has revoked this QR code. Access is no longer permitted.</p>
         </div>
       </div>
     );
@@ -214,133 +175,241 @@ export default function DoctorPortalScanPage() {
 
   if (status === "invalid") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAF8] dark:bg-[#0f1410] p-4">
-        <div className="max-w-sm w-full bg-white dark:bg-[#1e2820] rounded-3xl border border-[#e0e8e2] dark:border-white/10 p-8 text-center space-y-5 shadow-2xl">
-          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto">
-            <XCircle className="w-8 h-8 text-red-600" />
+      <div className="min-h-screen bg-[#F4F7F5] flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-sm space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-full bg-red-100 flex items-center justify-center">
+            <XCircle className="w-8 h-8 text-red-500" />
           </div>
-          <h2 className="font-manrope font-bold text-xl text-[#1a2820] dark:text-white">Invalid QR Code</h2>
-          <p className="text-sm text-[#7a9080]">This link is invalid or has been tampered with. Please scan the QR code directly from the patient's device.</p>
-          <Link href="/" className="block w-full py-3 text-sm font-semibold rounded-xl bg-[#42594A] text-white text-center">
-            Go to SafeMix
-          </Link>
+          <h2 className="font-bold text-xl text-[#1a2820]">Invalid QR Code</h2>
+          <p className="text-sm text-[#7a9080]">This QR is invalid or has been tampered with.</p>
         </div>
       </div>
     );
   }
 
+  // ─── Valid: show patient data ─────────────────────────────────────────────────
+
+  const meds: RegimenMedicine[] = snapshot?.medications ?? [];
+  const alerts: CachedVerdict[] = snapshot?.activeAlerts ?? [];
+  const redAlerts = alerts.filter(a => a.verdict === "red");
+  const yellowAlerts = alerts.filter(a => a.verdict === "yellow");
+
+  const overallVerdict = redAlerts.length > 0 ? "red" : yellowAlerts.length > 0 ? "yellow" : "green";
+  const overallCfg = verdictConfig[overallVerdict];
+
+  const systemGroups = meds.reduce<Record<string, RegimenMedicine[]>>((acc, m) => {
+    const s = m.system || "Other";
+    if (!acc[s]) acc[s] = [];
+    acc[s].push(m);
+    return acc;
+  }, {});
+
   return (
-    <div className="min-h-screen bg-[#F8FAF8] dark:bg-[#0f1410] p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-
-        {/* Header */}
-        <div className="bg-white dark:bg-[#1e2820] rounded-3xl border border-[#e0e8e2] dark:border-white/10 p-5 md:p-6 flex items-center justify-between gap-4 print:rounded-none print:border-0 print:shadow-none">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg,#5E7464,#42594A)" }}>
-              <Shield className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#5E7464]">SafeMix · Doctor Portal · Clinical Review Mode</p>
-              <h1 className="font-manrope font-bold text-lg text-[#1a2820] dark:text-white">Patient Medication Review</h1>
-            </div>
+    <div className="min-h-screen bg-[#F4F7F5] pb-16">
+      {/* Header bar */}
+      <div className="bg-white border-b border-[#e8f0ea] px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#5E7464] flex items-center justify-center">
+            <Shield className="w-4 h-4 text-white" />
           </div>
-          <div className="flex items-center gap-3">
-            {timeLeft && (
-              <div className="text-right hidden sm:block">
-                <p className="text-[10px] text-[#9ab0a0]">Access expires in</p>
-                <p className="text-xs font-bold text-emerald-600">{timeLeft} remaining</p>
-              </div>
-            )}
-            {/* Print button */}
-            <button
-              onClick={handlePrint}
-              title="Print this report"
-              className="print:hidden w-9 h-9 rounded-xl border border-[#e0e8e2] dark:border-white/15 bg-white dark:bg-[#1e2820] flex items-center justify-center text-[#52615a] dark:text-[#9ab0a0] hover:border-[#5E7464]/40 hover:text-[#5E7464] transition-all"
-            >
-              <Printer className="w-4 h-4" />
-            </button>
-            {/* Download PDF button */}
-            <button
-              onClick={handleDownloadPDF}
-              disabled={downloading}
-              className="print:hidden flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:shadow-lg disabled:opacity-60"
-              style={{ background: "linear-gradient(135deg,#5E7464,#42594A)" }}
-            >
-              {downloading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-              Download PDF
-            </button>
+          <div>
+            <span className="font-manrope font-bold text-[#1a2820] text-sm">SafeMix</span>
+            <span className="text-[10px] text-[#7a9080] ml-2">Doctor Portal</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-emerald-600 font-mono font-medium">
+          <Clock className="w-3.5 h-3.5" />
+          {timeLeft}
+        </div>
+      </div>
+
+      <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-5" ref={printRef}>
+
+        {/* Disclaimer */}
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-xs text-amber-700 font-medium text-center">
+          ⚕️ For clinical awareness only — not a prescription or diagnosis. Always apply professional judgment.
+        </div>
+
+        {/* Overall verdict */}
+        <div
+          className="rounded-3xl border p-6 text-center"
+          style={{ background: overallCfg.bg, borderColor: overallCfg.border }}
+        >
+          <p className="text-4xl mb-2">{overallCfg.icon}</p>
+          <p className="font-black text-2xl" style={{ color: overallCfg.text }}>{overallCfg.label}</p>
+          <p className="text-sm mt-1" style={{ color: overallCfg.text }}>
+            {meds.length} medicine{meds.length !== 1 ? "s" : ""} ·{" "}
+            {redAlerts.length} high-risk · {yellowAlerts.length} caution{" "}
+            · {alerts.filter(a => a.verdict === "green").length} safe interaction{alerts.filter(a => a.verdict === "green").length !== 1 ? "s" : ""}
+          </p>
+          {snapshot?.patientName && (
+            <p className="text-xs mt-2 opacity-60">Patient: {snapshot.patientName}</p>
+          )}
+        </div>
+
+        {/* Block 1 - Demographics (from snapshot metadata) */}
+        <div className="bg-white rounded-3xl border border-[#e0e8e2] p-5 space-y-2">
+          <h3 className="font-bold text-sm text-[#1a2820]">Patient Summary</h3>
+          <div className="grid grid-cols-2 gap-2 text-xs text-[#52615a]">
+            <div className="bg-[#F8F8F4] rounded-xl p-2">
+              <p className="text-[10px] text-[#9ab0a0] uppercase tracking-wide">Patient</p>
+              <p className="font-medium">{snapshot?.patientName || "Anonymous"}</p>
+            </div>
+            <div className="bg-[#F8F8F4] rounded-xl p-2">
+              <p className="text-[10px] text-[#9ab0a0] uppercase tracking-wide">Report Generated</p>
+              <p className="font-medium">{snapshot ? new Date(snapshot.createdAt).toLocaleString("en-IN") : "—"}</p>
+            </div>
+            <div className="bg-[#F8F8F4] rounded-xl p-2">
+              <p className="text-[10px] text-[#9ab0a0] uppercase tracking-wide">Total Medicines</p>
+              <p className="font-medium">{meds.length}</p>
+            </div>
+            <div className="bg-[#F8F8F4] rounded-xl p-2">
+              <p className="text-[10px] text-[#9ab0a0] uppercase tracking-wide">Active Alerts</p>
+              <p className="font-medium" style={{ color: redAlerts.length > 0 ? "#C41C00" : "#237804" }}>
+                {redAlerts.length} Red · {yellowAlerts.length} Yellow
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Patient Info */}
-        <div className="bg-white dark:bg-[#1e2820] rounded-3xl border border-[#e0e8e2] dark:border-white/10 p-6">
-          <h2 className="font-manrope font-semibold text-[#1a2820] dark:text-white mb-4">Patient Information</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: "Name", value: "Rahul (ID: " + (payload?.uid?.slice(0, 6) || "S125") + ")" },
-              { label: "Age", value: "45 years" },
-              { label: "Conditions", value: "Type 2 Diabetes, Hypertension" },
-              { label: "Shared", value: new Date(payload?.issued || Date.now()).toLocaleString("en-IN") },
-            ].map((f) => (
-              <div key={f.label} className="p-3 rounded-xl bg-[#f8faf8] dark:bg-[#141a15]">
-                <p className="text-[10px] font-bold text-[#9ab0a0] uppercase tracking-widest mb-1">{f.label}</p>
-                <p className="text-sm font-semibold text-[#1a2820] dark:text-white">{f.value}</p>
+        {/* Block 2 - Medication list grouped by system */}
+        {meds.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-[#e0e8e2] p-8 text-center text-[#9ab0a0] text-sm">
+            {snapshot === null
+              ? "Loading patient data from Firestore…"
+              : "No medicines recorded in this regimen."}
+          </div>
+        ) : (
+          <div className="bg-white rounded-3xl border border-[#e0e8e2] p-5 space-y-4">
+            <h3 className="font-bold text-sm text-[#1a2820]">Medication Regimen</h3>
+            {Object.entries(systemGroups).map(([sys, meds]) => (
+              <div key={sys}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: systemColor[sys] || "#9ab0a0" }} />
+                  <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: systemColor[sys] || "#9ab0a0" }}>{sys}</span>
+                </div>
+                <div className="space-y-2 pl-4">
+                  {meds.map((m) => (
+                    <div key={m.id} className="bg-[#F8F8F4] rounded-xl p-3 flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-[#1a2820]">{m.name}</p>
+                        <p className="text-xs text-[#7a9080] mt-0.5">
+                          {[m.dosage, m.frequency, m.timing].filter(Boolean).join(" · ")}
+                          {m.withFood !== undefined && (m.withFood ? " · With food" : " · Empty stomach")}
+                        </p>
+                      </div>
+                      {m.startDate && (
+                        <span className="text-[10px] text-[#9ab0a0] whitespace-nowrap">Since {m.startDate}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
+        )}
+
+        {/* Block 3 - Interaction alerts */}
+        {alerts.length > 0 && (
+          <div className="bg-white rounded-3xl border border-[#e0e8e2] p-5 space-y-3">
+            <h3 className="font-bold text-sm text-[#1a2820]">Interaction Alerts</h3>
+            {alerts.map((alert, i) => {
+              const cfg = verdictConfig[alert.verdict] || verdictConfig.green;
+              const key = `alert_${i}`;
+              return (
+                <div key={key} className="rounded-2xl border p-4 space-y-2"
+                  style={{ background: cfg.bg, borderColor: cfg.border }}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black px-2 py-0.5 rounded-full"
+                        style={{ background: cfg.border, color: cfg.text }}>
+                        {cfg.label}
+                      </span>
+                      <span className="text-sm font-semibold text-[#1a2820]">{alert.medicine}</span>
+                      {alert.source && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/60 text-[#7a9080] font-medium">
+                          {alert.source === "rules" ? "📋 Rule Engine" : "🤖 AI"}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setShowClinical(prev => ({ ...prev, [key]: !prev[key] }))}
+                      className="text-[10px] text-[#7a9080] flex items-center gap-1">
+                      {showClinical[key] ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      {showClinical[key] ? "Less" : "Detail"}
+                    </button>
+                  </div>
+                  <p className="text-xs" style={{ color: cfg.text }}>{alert.reason}</p>
+                  {showClinical[key] && alert.suggestion && (
+                    <div className="mt-2 pt-2 border-t" style={{ borderColor: cfg.border }}>
+                      <p className="text-xs font-semibold" style={{ color: cfg.text }}>Recommendation:</p>
+                      <p className="text-xs mt-0.5" style={{ color: cfg.text }}>{alert.suggestion}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Block 4 - Acknowledgement */}
+        <div className="bg-white rounded-3xl border border-[#e0e8e2] p-5 space-y-4">
+          <h3 className="font-bold text-sm text-[#1a2820]">Send Acknowledgement to Patient</h3>
+          <p className="text-xs text-[#7a9080]">
+            The patient will see your acknowledgement instantly on their device.
+          </p>
+          {ackSent ? (
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
+              <div>
+                <p className="text-sm font-bold text-emerald-700">Acknowledgement sent!</p>
+                <p className="text-xs text-emerald-600">The patient has been notified.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Your name (e.g. Dr. Suresh Reddy)"
+                value={ackName}
+                onChange={e => setAckName(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-[#e0e8e2] text-sm text-[#1a2820] outline-none focus:border-[#5E7464]"
+              />
+              <textarea
+                rows={2}
+                placeholder="Clinical note (optional) — e.g. 'Reviewed. Please space metformin and karela by 2 hours.'"
+                value={ackNote}
+                onChange={e => setAckNote(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-[#e0e8e2] text-sm text-[#1a2820] outline-none focus:border-[#5E7464] resize-none"
+              />
+              <button
+                onClick={handleAcknowledge}
+                disabled={!ackName.trim() || ackSending}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-white text-sm font-semibold transition-all disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg,#5E7464,#42594A)" }}
+              >
+                {ackSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                {ackSending ? "Sending…" : "Send Acknowledgement"}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* AI Interaction Alerts */}
-        <div className="space-y-3">
-          <h2 className="font-manrope font-semibold text-[#1a2820] dark:text-white px-1">AI Interaction Analysis</h2>
-          {DEMO_ALERTS.map((alert, i) => {
-            const v = verdictConfig[alert.verdict];
-            return (
-              <div key={i} className="flex items-start gap-4 p-5 rounded-2xl border" style={{ background: v.bg, borderColor: v.border }}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: v.iconBg }}>
-                  <v.icon className="w-5 h-5" style={{ color: v.text }} />
-                </div>
-                <div>
-                  <p className="font-bold text-sm" style={{ color: v.text }}>{alert.pair}</p>
-                  <p className="text-sm mt-1" style={{ color: v.text, opacity: 0.85 }}>{alert.reason}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Medicines Table */}
-        <div className="bg-white dark:bg-[#1e2820] rounded-3xl border border-[#e0e8e2] dark:border-white/10 overflow-hidden">
-          <div className="px-6 py-4 border-b border-[#f0f4f1] dark:border-white/10 flex items-center gap-3">
-            <Pill className="w-4 h-4 text-[#5E7464]" />
-            <h2 className="font-manrope font-semibold text-[#1a2820] dark:text-white">Current Medicines ({DEMO_REGIMEN.length})</h2>
-          </div>
-          <div className="divide-y divide-[#f0f4f1] dark:divide-white/5">
-            {DEMO_REGIMEN.map((m) => (
-              <div key={m.name} className="flex items-center gap-4 px-6 py-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                  style={{ background: systemColor[m.system] || "#9ab0a0" }}>
-                  {m.name[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-[#1a2820] dark:text-white">{m.name}</p>
-                  <p className="text-xs text-[#9ab0a0]">{m.dosage} · {m.frequency} · {m.timing}</p>
-                </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: `${systemColor[m.system]}15`, color: systemColor[m.system] || "#9ab0a0" }}>
-                  {m.system}
-                </span>
-              </div>
-            ))}
-          </div>
+        {/* Actions */}
+        <div className="flex gap-3">
+          <button onClick={handlePrint}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border border-[#e0e8e2] text-sm font-medium text-[#52615a] hover:bg-white transition-all">
+            <Printer className="w-4 h-4" /> Print
+          </button>
+          <button onClick={handleDownload}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border border-[#e0e8e2] text-sm font-medium text-[#52615a] hover:bg-white transition-all">
+            <Download className="w-4 h-4" /> Download
+          </button>
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-[#9ab0a0] pb-8">
-          ⚕ SafeMix · Secure Doctor Portal · Data encrypted in transit · Access expires automatically
+        <p className="text-center text-[10px] text-[#9ab0a0] pb-4">
+          SafeMix — For awareness only, not diagnosis. Token verified via HMAC-SHA256 JWT.
         </p>
       </div>
     </div>

@@ -4,6 +4,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
 import BottomNav from "@/components/layout/BottomNav";
 import { ToastContainer } from "@/components/ui/ToastNotification";
+import FloatingAIAssistant from "@/components/ui/FloatingAIAssistant";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -22,13 +23,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 lg:p-8 md:pb-8">
           {children}
         </main>
-        
+
         {/* Mobile Navigation */}
         <BottomNav />
       </div>
 
-      {/* Global toast notifications (FCM foreground messages) */}
+      {/* Global: FCM toast notifications */}
       <ToastContainer />
+
+      {/* Global: AI assistant floating button */}
+      <FloatingAIAssistant />
     </div>
   );
 }

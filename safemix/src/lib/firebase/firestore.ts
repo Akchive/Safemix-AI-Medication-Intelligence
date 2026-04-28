@@ -4,8 +4,8 @@
  */
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs,
-  deleteDoc, updateDoc, query, orderBy, limit,
-  Timestamp, serverTimestamp, onSnapshot, type Unsubscribe,
+  deleteDoc, query, orderBy, limit,
+  onSnapshot, type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import type { RegimenMedicine } from "@/lib/regimen";
@@ -118,7 +118,6 @@ export async function submitAdrReport(uid: string, report: Omit<AdrReport, "uid"
     status: "pending_review",
     reportedAt: Date.now(),
   });
-  // Also write to global collection for admin review
   await setDoc(doc(db, "adr_reports", ref.id), {
     uid,
     ...report,
@@ -136,19 +135,73 @@ export async function getAllAdrReports(): Promise<(AdrReport & { docId: string }
   return snap.docs.map((d) => ({ docId: d.id, ...d.data() } as AdrReport & { docId: string }));
 }
 
+// ─── Doctor Patient Snapshot ──────────────────────────────────────────────────
+// When a patient generates a QR, their current regimen snapshot is written to
+// doctor_snapshots/{jti}. The doctor's scan page reads this by jti from the JWT.
+// The path is only discoverable via the signed JWT — security by path obscurity for MVP.
+
+export interface PatientSnapshot {
+  uid: string;
+  jti: string;
+  expiry: number;
+  medications: RegimenMedicine[];
+  activeAlerts: CachedVerdict[];
+  patientName?: string;
+  createdAt: number;
+  acknowledgedAt?: number;
+  acknowledgedBy?: string;
+  acknowledgedNote?: string;
+}
+
+export async function writePatientSnapshot(snapshot: PatientSnapshot): Promise<void> {
+  await setDoc(doc(db, "doctor_snapshots", snapshot.jti), snapshot);
+}
+
+export async function readPatientSnapshot(jti: string): Promise<PatientSnapshot | null> {
+  const snap = await getDoc(doc(db, "doctor_snapshots", jti));
+  return snap.exists() ? (snap.data() as PatientSnapshot) : null;
+}
+
+export async function acknowledgeSnapshot(
+  jti: string,
+  note: string,
+  doctorLabel: string
+): Promise<void> {
+  await setDoc(
+    doc(db, "doctor_snapshots", jti),
+    { acknowledgedAt: Date.now(), acknowledgedBy: doctorLabel, acknowledgedNote: note },
+    { merge: true }
+  );
+}
+
+// Watch for doctor acknowledgement in real-time (patient side)
+export function watchAcknowledgement(
+  jti: string,
+  callback: (ack: { acknowledgedAt: number; acknowledgedBy: string; acknowledgedNote: string } | null) => void
+): Unsubscribe {
+  return onSnapshot(doc(db, "doctor_snapshots", jti), (snap) => {
+    if (!snap.exists()) { callback(null); return; }
+    const data = snap.data() as PatientSnapshot;
+    if (data.acknowledgedAt) {
+      callback({
+        acknowledgedAt: data.acknowledgedAt,
+        acknowledgedBy: data.acknowledgedBy || "Doctor",
+        acknowledgedNote: data.acknowledgedNote || "",
+      });
+    } else {
+      callback(null);
+    }
+  });
+}
+
 // ─── Migration: localStorage → Firestore ─────────────────────────────────────
 
-/**
- * Called once on login. Moves any localStorage regimen/verdicts to Firestore,
- * then pulls Firestore data back into localStorage so the app works offline.
- */
 export async function migrateLocalStorageToFirestore(uid: string): Promise<void> {
   try {
     // 1. Migrate regimen
     const raw = localStorage.getItem("safemix_regimen");
     if (raw) {
       const meds: RegimenMedicine[] = JSON.parse(raw);
-      // Get existing Firestore meds to avoid duplicates
       const existing = await getMedications(uid);
       const existingIds = new Set(existing.map((m) => m.id));
       for (const med of meds) {
@@ -156,9 +209,14 @@ export async function migrateLocalStorageToFirestore(uid: string): Promise<void>
           await addMedication(uid, med);
         }
       }
-      // Pull merged list back to localStorage
       const merged = await getMedications(uid);
       localStorage.setItem("safemix_regimen", JSON.stringify(merged));
+    } else {
+      // No local data — pull from Firestore
+      const fsMeds = await getMedications(uid);
+      if (fsMeds.length > 0) {
+        localStorage.setItem("safemix_regimen", JSON.stringify(fsMeds));
+      }
     }
 
     // 2. Migrate verdicts
@@ -180,6 +238,5 @@ export async function migrateLocalStorageToFirestore(uid: string): Promise<void>
     }
   } catch (err) {
     console.error("[SafeMix] Firestore migration error:", err);
-    // Non-fatal — app works via localStorage
   }
 }

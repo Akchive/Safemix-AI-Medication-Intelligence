@@ -1,11 +1,13 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { QrCode, Clock, Shield, Share2, ArrowRight, History, Copy, CheckCheck } from "lucide-react";
+import { QrCode, Clock, Shield, Share2, ArrowRight, History, Copy, CheckCheck, CheckCircle } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
-import { generateDoctorToken } from "@/lib/qrToken";
-import { logShare } from "@/lib/firebase/firestore";
+import { generateDoctorToken, verifyDoctorToken } from "@/lib/qrToken";
+import { logShare, writePatientSnapshot, watchAcknowledgement } from "@/lib/firebase/firestore";
+import { getRegimen } from "@/lib/regimen";
+import { getCachedVerdicts } from "@/lib/interactionCache";
 
 const pastShares = [
   { id: "S123", doctor: "Dr. Sharma", hospital: "Apollo Hospitals", date: "24 Apr 2026", expiry: "Expired", status: "Expired" },
@@ -21,7 +23,10 @@ export default function DoctorSharePage() {
   const [copied, setCopied] = useState(false);
   const [timeLeft, setTimeLeft] = useState("");
   const [expiryTimestamp, setExpiryTimestamp] = useState<number | null>(null);
+  const [currentJti, setCurrentJti] = useState<string | null>(null);
+  const [acknowledgement, setAcknowledgement] = useState<{ acknowledgedAt: number; acknowledgedBy: string; acknowledgedNote: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const unsubAckRef = useRef<(() => void) | null>(null);
 
   const expiryMs: Record<string, number> = {
     "15 min":  15 * 60 * 1000,
@@ -59,6 +64,9 @@ export default function DoctorSharePage() {
 
   const handleGenerate = () => {
     setGenerating(true);
+    setAcknowledgement(null);
+    if (unsubAckRef.current) { unsubAckRef.current(); unsubAckRef.current = null; }
+
     setTimeout(async () => {
       try {
         const uid = user?.uid || `guest_${Date.now()}`;
@@ -68,7 +76,31 @@ export default function DoctorSharePage() {
 
         // Generate HMAC-SHA256 signed JWT — cannot be forged or tampered
         const token = await generateDoctorToken(uid, durationMs);
+        const jwtPayload = await verifyDoctorToken(token);
+        const jti = jwtPayload.jti;
         const encodedToken = encodeURIComponent(token);
+
+        // Write real patient regimen snapshot to Firestore
+        const medications = getRegimen();
+        const allVerdicts = getCachedVerdicts();
+        const activeAlerts = allVerdicts.filter(v => v.verdict === "red" || v.verdict === "yellow");
+        const patientName = user?.displayName || user?.phoneNumber || "Patient";
+
+        if (jti) {
+          writePatientSnapshot({
+            uid,
+            jti,
+            expiry: expiryTime,
+            medications,
+            activeAlerts,
+            patientName,
+            createdAt: issued,
+          }).catch(console.error);
+
+          // Watch for doctor acknowledgement in real time
+          setCurrentJti(jti);
+          unsubAckRef.current = watchAcknowledgement(jti, setAcknowledgement);
+        }
 
         // Store in localStorage for share history UI
         const shares = JSON.parse(localStorage.getItem("safemix_shares") || "[]");
@@ -81,7 +113,6 @@ export default function DoctorSharePage() {
         setGenerating(false);
         setQrGenerated(true);
 
-        // Log share to Firestore
         if (user?.uid) {
           logShare(user.uid, { token: encodedToken, issued, expiry: expiryTime, duration: expiry }).catch(console.error);
         }
@@ -215,7 +246,29 @@ export default function DoctorSharePage() {
                   Revoke Now
                 </button>
               </div>
-            </div>
+
+              {/* Doctor acknowledgement — real-time via Firestore onSnapshot */}
+              {acknowledgement ? (
+                <div className="flex items-start gap-3 p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/40">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                      ✓ Acknowledged by {acknowledgement.acknowledgedBy}
+                    </p>
+                    {acknowledgement.acknowledgedNote && (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-300 mt-0.5">
+                        "{acknowledgement.acknowledgedNote}"
+                      </p>
+                    )}
+                    <p className="text-[10px] text-emerald-500 mt-0.5">
+                      {new Date(acknowledgement.acknowledgedAt).toLocaleTimeString("en-IN")}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-[#9ab0a0] animate-pulse">Waiting for doctor to scan &amp; acknowledge…</p>
+              )}
+
           )}
         </div>
 

@@ -8,6 +8,8 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 export interface DoctorTokenPayload extends JWTPayload {
   uid: string;
   sub: "doctor-share";
+  /** Unique share ID — maps to doctor_snapshots/{jti} in Firestore */
+  jti: string;
   /** Expiry epoch (ms) — for UI countdown (same as `exp * 1000`) */
   expiry: number;
   /** Issue time epoch (ms) */
@@ -28,16 +30,19 @@ function getSecret(): Uint8Array {
 export async function generateDoctorToken(uid: string, durationMs: number): Promise<string> {
   const issued = Date.now();
   const expiry = issued + durationMs;
+  const jti = `${uid.slice(0, 8)}_${issued}`; // unique share ID
 
   return await new SignJWT({
     uid,
     sub: "doctor-share",
+    jti,
     expiry,
     issued,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt(Math.floor(issued / 1000))
     .setExpirationTime(Math.floor(expiry / 1000))
+    .setJti(jti)
     .sign(getSecret());
 }
 
