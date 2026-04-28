@@ -48,4 +48,8 @@ export const AnalyticsEvents = {
   DATA_EXPORTED: "data_exported",
   ACCOUNT_DELETED: "account_deleted",
   REVIEWER_DECISION: "reviewer_decision",
+  ALTERNATIVES_CLICKED: "alternatives_clicked",
+  ALTERNATIVES_SUCCESS: "alternatives_success",
+  ALTERNATIVES_FALLBACK: "alternatives_fallback",
+  ALTERNATIVES_FAILED: "alternatives_failed",
 } as const;

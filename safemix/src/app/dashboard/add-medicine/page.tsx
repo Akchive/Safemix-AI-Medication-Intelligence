@@ -5,6 +5,7 @@ import {
   Loader2, Sparkles, X, ScanLine, ImageIcon, MicOff, Trash2, Plus,
 } from "lucide-react";
 import { checkInteraction, type InteractionResult } from "@/app/actions/checkInteraction";
+import { findAlternatives, type AlternativeOption } from "@/app/actions/findAlternatives";
 import { extractMedicineData, type OcrExtractedData } from "@/app/actions/ocr";
 import { parseVoiceInput, type ParsedMedicineFields } from "@/app/actions/parseVoice";
 import CameraScanner from "@/components/ui/CameraScanner";
@@ -54,6 +55,10 @@ export default function AddMedicinePage() {
   const [result, setResult] = useState<InteractionResult | null>(null);
   const [error, setError] = useState("");
   const [addedSuccess, setAddedSuccess] = useState(false);
+  const [findingAlternatives, setFindingAlternatives] = useState(false);
+  const [alternatives, setAlternatives] = useState<AlternativeOption[]>([]);
+  const [alternativesSummary, setAlternativesSummary] = useState("");
+  const [alternativesWarning, setAlternativesWarning] = useState("");
 
   // ── Dynamic regimen from localStorage ──────────────────────────────────────
   const [regimen, setRegimen] = useState<RegimenMedicine[]>([]);
@@ -277,6 +282,9 @@ export default function AddMedicinePage() {
     if (!form.name.trim()) { setError("Please enter a medicine name first."); return; }
     setChecking(true);
     setResult(null);
+    setAlternatives([]);
+    setAlternativesSummary("");
+    setAlternativesWarning("");
     setError("");
     try {
       const data = await checkInteraction(form.name.trim(), form.system || "Unknown system", regimenNames);
@@ -319,6 +327,37 @@ export default function AddMedicinePage() {
   const handleRemoveFromRegimen = (id: string) => {
     removeFromRegimen(id, uid);
     setRegimen(getRegimen());
+  };
+
+  const handleFindAlternatives = async () => {
+    if (!result || !form.name.trim()) return;
+    setFindingAlternatives(true);
+    setAlternatives([]);
+    setAlternativesSummary("");
+    setAlternativesWarning("");
+    await trackEvent(AnalyticsEvents.ALTERNATIVES_CLICKED, { verdict: result.verdict, medicine: form.name.trim() });
+
+    try {
+      const out = await findAlternatives(form.name.trim(), form.system || "Unknown system", regimenNames);
+      setAlternatives(out.alternatives);
+      setAlternativesSummary(out.summary);
+      setAlternativesWarning(out.warning ?? "");
+
+      if (out.alternatives.length > 0) {
+        await trackEvent(AnalyticsEvents.ALTERNATIVES_SUCCESS, { count: out.alternatives.length, medicine: form.name.trim() });
+      } else if (out.warning) {
+        await trackEvent(AnalyticsEvents.ALTERNATIVES_FALLBACK, { medicine: form.name.trim() });
+      } else {
+        await trackEvent(AnalyticsEvents.ALTERNATIVES_FAILED, { medicine: form.name.trim() });
+      }
+    } catch {
+      setAlternatives([]);
+      setAlternativesSummary("Could not fetch alternatives right now.");
+      setAlternativesWarning("Please consult your doctor/pharmacist before changing medicines.");
+      await trackEvent(AnalyticsEvents.ALTERNATIVES_FAILED, { medicine: form.name.trim() });
+    } finally {
+      setFindingAlternatives(false);
+    }
   };
 
   // ─────────────────────────────────────────── Render ──────────────────────
@@ -734,10 +773,33 @@ export default function AddMedicinePage() {
                 style={{ background: v.text }}>
                 {addedSuccess ? <><CheckCircle className="w-4 h-4" /> Added!</> : <><Plus className="w-4 h-4" /> {result.verdict === "green" ? "Add to Regimen" : "Add Despite Warning"}</>}
               </button>
-              <button className="flex-1 py-2.5 text-sm font-semibold rounded-xl border bg-white/70" style={{ borderColor: v.border, color: v.text }}>
-                Find Alternatives
+              <button
+                onClick={handleFindAlternatives}
+                disabled={findingAlternatives}
+                className="flex-1 py-2.5 text-sm font-semibold rounded-xl border bg-white/70 disabled:opacity-70"
+                style={{ borderColor: v.border, color: v.text }}
+              >
+                {findingAlternatives ? "Finding alternatives..." : "Find Alternatives"}
               </button>
             </div>
+
+            {(alternativesSummary || alternativesWarning || alternatives.length > 0) && (
+              <div className="mt-4 p-4 rounded-xl bg-white/70 border" style={{ borderColor: v.border }}>
+                {alternativesSummary && <p className="text-sm font-semibold mb-2" style={{ color: v.text }}>{alternativesSummary}</p>}
+                {alternatives.length > 0 && (
+                  <div className="space-y-2">
+                    {alternatives.map((alt, idx) => (
+                      <div key={`${alt.name}-${idx}`} className="p-3 rounded-lg bg-white border border-[#e8e8e8]">
+                        <p className="text-sm font-bold text-[#1a2820]">{alt.name}</p>
+                        <p className="text-xs text-[#52615a]">{alt.system} · {alt.confidence} confidence · {alt.source}</p>
+                        <p className="text-xs mt-1 text-[#42594A]">{alt.rationale}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {alternativesWarning && <p className="text-xs mt-2 text-[#875400]">{alternativesWarning}</p>}
+              </div>
+            )}
           </div>
         );
       })()}
