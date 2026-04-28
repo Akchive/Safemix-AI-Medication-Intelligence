@@ -49,6 +49,9 @@ export default function AdminSettingsPage() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [replaying, setReplaying] = useState(false);
   const [replayResult, setReplayResult] = useState<string>("");
+  const [cleanupDays, setCleanupDays] = useState(7);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -89,6 +92,28 @@ export default function AdminSettingsPage() {
       setReplayResult((e as Error).message);
     } finally {
       setReplaying(false);
+    }
+  };
+
+  const cleanupAbdmOps = async () => {
+    setCleaning(true);
+    setCleanupResult("");
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Login required");
+      const token = await user.getIdToken();
+      const res = await fetch("/api/abdm/ops/cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ olderThanDays: cleanupDays }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Cleanup failed");
+      setCleanupResult(`Marked stale queue: ${json.queueUpdated}, replay-guard deleted: ${json.replayDeleted}`);
+    } catch (e) {
+      setCleanupResult((e as Error).message);
+    } finally {
+      setCleaning(false);
     }
   };
 
@@ -163,6 +188,29 @@ export default function AdminSettingsPage() {
           {replaying ? "Replaying..." : "Replay queued consents"}
         </button>
         {replayResult && <p className="text-xs text-[#42594A]">{replayResult}</p>}
+      </div>
+
+      <div className="bg-white border border-[#e0e8e2] rounded-2xl p-5 space-y-3">
+        <h3 className="font-bold text-[#1a2820] text-sm">ABDM Ops Cleanup</h3>
+        <p className="text-xs text-[#7a9080]">Marks very old local queue entries as stale and deletes old replay-guard keys.</p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            max={365}
+            value={cleanupDays}
+            onChange={(e) => setCleanupDays(Number(e.target.value) || 7)}
+            className="w-24 px-3 py-2 rounded-xl border border-[#e0e8e2] text-sm"
+          />
+          <button
+            onClick={cleanupAbdmOps}
+            disabled={cleaning}
+            className="px-4 py-2 rounded-xl bg-[#42594A] text-white text-sm font-semibold disabled:opacity-50"
+          >
+            {cleaning ? "Cleaning..." : "Run cleanup"}
+          </button>
+        </div>
+        {cleanupResult && <p className="text-xs text-[#42594A]">{cleanupResult}</p>}
       </div>
     </div>
   );
