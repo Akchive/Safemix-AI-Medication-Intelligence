@@ -19,10 +19,12 @@ Output style (always):
 3) **Why this risk exists** (mechanism in plain language)
 4) **What to do now** (3-5 practical bullets)
 5) **What to watch for** (symptoms/signs in short bullets)
+6) **Follow-up**: ask one useful follow-up question that would improve accuracy.
 6) End with: "This is for awareness, not diagnosis. Talk to a doctor or pharmacist."
 
 Quality rules:
 - Be informative and specific; avoid generic motivational lines.
+- Be descriptive enough to be useful; avoid half-sentences.
 - Never repeat the same greeting/opening across turns.
 - Continue from chat context; do not restart from scratch.
 - If crucial info is missing, ask max 2 targeted follow-up questions.
@@ -52,10 +54,15 @@ function extractTextFromResponse(response: any): string {
 }
 
 function normalizeReply(reply: string): string {
-  return reply
+  let out = reply
     .replace(/\n{3,}/g, "\n\n")
     .replace(/^\s*(Namaste|Hello|Hi)[!,. ]*/i, "")
     .trim();
+  // Ensure responses don't end abruptly in the middle of a sentence.
+  if (!/[.!?]"?$/.test(out)) {
+    out = `${out}.`;
+  }
+  return out;
 }
 
 export async function POST(req: NextRequest) {

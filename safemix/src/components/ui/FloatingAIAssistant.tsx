@@ -5,6 +5,7 @@ import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
 import { getLanguage, type LangCode } from "@/lib/i18n";
 
 interface Message {
+  id: string;
   role: "user" | "assistant";
   text: string;
 }
@@ -33,7 +34,7 @@ export default function FloatingAIAssistant() {
     if (!text.trim() || loading) return;
     const userMsg = text.trim();
     setInput("");
-    setMessages(prev => [...prev, { role: "user", text: userMsg }]);
+    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: "user", text: userMsg }]);
     setLoading(true);
     await trackEvent(AnalyticsEvents.ASSISTANT_INVOKED, { prompt_length: userMsg.length });
 
@@ -46,9 +47,13 @@ export default function FloatingAIAssistant() {
         body: JSON.stringify({ message: userMsg, language, history }),
       });
       const data = await resp.json();
-      setMessages(prev => [...prev, { role: "assistant", text: data.reply || "I'm having trouble answering that. Please try again." }]);
+      const replyText =
+        typeof data?.reply === "string" && data.reply.trim()
+          ? data.reply
+          : "I'm having trouble answering that. Please try again.";
+      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: "assistant", text: replyText }]);
     } catch {
-      setMessages(prev => [...prev, { role: "assistant", text: "Sorry, I couldn't reach the SafeMix AI. Please check your connection." }]);
+      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: "assistant", text: "Sorry, I couldn't reach the SafeMix AI. Please check your connection." }]);
     } finally {
       setLoading(false);
     }
@@ -121,10 +126,10 @@ export default function FloatingAIAssistant() {
                 </div>
               </div>
             )}
-            {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            {messages.map((m) => (
+              <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${ m.role === "user" ? "bg-[#5E7464] text-white rounded-br-md" : "bg-[#F4F7F5] text-[#1a2820] rounded-bl-md border border-[#e8f0ea] " }`}>
-                  {m.text}
+                  <div className="whitespace-pre-wrap break-words">{String(m.text ?? "")}</div>
                 </div>
               </div>
             ))}
