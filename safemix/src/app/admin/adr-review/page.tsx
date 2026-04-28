@@ -4,11 +4,17 @@ import { getAllAdrReports, type AdrReport } from "@/lib/firebase/firestore";
 import { AlertTriangle, CheckCircle, Clock, User, Pill, Calendar, FileText, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
+// Map PvPI seriousness → display severity bucket.
 const severityConfig: Record<string, { color: string; bg: string; label: string }> = {
-  mild:     { color: "#F59E0B", bg: "#FFFBE6", label: "Mild" },
-  moderate: { color: "#EF6C00", bg: "#FFF3E0", label: "Moderate" },
-  severe:   { color: "#C41C00", bg: "#FFF1F0", label: "Severe" },
+  non_serious:        { color: "#F59E0B", bg: "#FFFBE6", label: "Non-serious" },
+  hospitalisation:    { color: "#EF6C00", bg: "#FFF3E0", label: "Hospitalised" },
+  life_threatening:   { color: "#C41C00", bg: "#FFF1F0", label: "Life-threatening" },
+  disability:         { color: "#C41C00", bg: "#FFF1F0", label: "Disability" },
+  congenital_anomaly: { color: "#C41C00", bg: "#FFF1F0", label: "Congenital anomaly" },
+  death:              { color: "#C41C00", bg: "#FFF1F0", label: "Death" },
+  other_serious:      { color: "#EF6C00", bg: "#FFF3E0", label: "Other serious" },
 };
+const SERIOUS_BUCKET = new Set(["hospitalisation", "life_threatening", "disability", "congenital_anomaly", "death", "other_serious"]);
 
 const statusConfig: Record<string, { icon: typeof Clock; color: string; label: string }> = {
   pending_review: { icon: Clock,         color: "#F59E0B", label: "Pending Review" },
@@ -68,7 +74,7 @@ export default function AdrReviewPage() {
           {[
             { label: "Total Reports", value: reports.length, color: "#5E7464" },
             { label: "Pending Review", value: reports.filter(r => r.status === "pending_review").length, color: "#F59E0B" },
-            { label: "Severe Events", value: reports.filter(r => r.severity === "severe").length, color: "#C41C00" },
+            { label: "Serious Events", value: reports.filter(r => SERIOUS_BUCKET.has(r.seriousness)).length, color: "#C41C00" },
           ].map((stat) => (
             <div key={stat.label} className="bg-white rounded-2xl border border-[#e0e8e2] p-4 text-center">
               <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
@@ -92,7 +98,7 @@ export default function AdrReviewPage() {
         ) : (
           <div className="space-y-4">
             {reports.map((report) => {
-              const sev = severityConfig[report.severity] || { color: "#52615a", bg: "#F8F8F4", label: report.severity };
+              const sev = severityConfig[report.seriousness] || { color: "#52615a", bg: "#F8F8F4", label: report.seriousness };
               const StatusIcon = statusConfig[report.status]?.icon || Clock;
               const statusColor = statusConfig[report.status]?.color || "#52615a";
               const statusLabel = statusConfig[report.status]?.label || report.status;
@@ -104,7 +110,8 @@ export default function AdrReviewPage() {
                       <span className="text-[10px] font-black px-2 py-1 rounded-full" style={{ background: sev.bg, color: sev.color }}>
                         {sev.label.toUpperCase()}
                       </span>
-                      <h3 className="font-bold text-[#1a2820]">{report.medicine}</h3>
+                      <h3 className="font-bold text-[#1a2820]">{report.suspectedMedicine}</h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#f0f5f1] text-[#42594A] uppercase tracking-widest">{report.medicineSystem}</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: statusColor }}>
                       <StatusIcon className="w-3.5 h-3.5" />
@@ -113,13 +120,13 @@ export default function AdrReviewPage() {
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-[#7a9080]">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 truncate">
                       <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>{report.symptom}</span>
+                      <span className="truncate" title={report.reactionDescription}>{report.reactionDescription}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5" />
-                      <span>{report.date}</span>
+                      <span>{report.reactionStartDate}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <User className="w-3.5 h-3.5" />

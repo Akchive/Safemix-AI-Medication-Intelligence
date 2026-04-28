@@ -97,16 +97,73 @@ export async function saveFcmTokenFirestore(uid: string, token: string): Promise
   );
 }
 
-// ─── ADR Reports ──────────────────────────────────────────────────────────────
+// ─── ADR Reports — PvPI Suspected ADR + AIIA ASU&H ADR fields (PRD §14.1) ────
+// Field names follow the PvPI form (AMC-PvPI-Suspected-ADR-Reporting-Form-v1.4)
+// and the AIIA ASU&H ADR Form so we can submit upstream without remapping when
+// the AYUSH Suraksha portal MoU lands (PRD §11 month 4–9).
 
 export interface AdrReport {
   uid: string;
-  medicine: string;
-  symptom: string;
-  severity: string;
-  date: string;
-  notes: string;
-  doctorNotified: boolean;
+  // ── A. Patient information (PvPI §A) ────────────────────────────────────
+  patientInitials?: string;
+  patientAge?: number;        // years; PvPI accepts "Date of Birth or Age"
+  patientWeightKg?: number;
+  patientSex?: "F" | "M" | "X";
+
+  // ── B. Suspected adverse reaction (PvPI §B) ─────────────────────────────
+  reactionDescription: string;
+  reactionStartDate: string;  // ISO YYYY-MM-DD
+  reactionStopDate?: string;
+  reactionOutcome:
+    | "recovered"
+    | "recovering"
+    | "not_recovered"
+    | "fatal"
+    | "recovered_with_sequelae"
+    | "unknown";
+  seriousness: "non_serious" | "death" | "life_threatening" | "hospitalisation" | "disability" | "congenital_anomaly" | "other_serious";
+
+  // ── C. Suspected medicines (PvPI §C) ────────────────────────────────────
+  /** Brand or generic name */
+  suspectedMedicine: string;
+  /** Allopathic | Ayurvedic | Siddha | Unani | Homeopathy | OTC | Herbal | Home Remedy */
+  medicineSystem: string;
+  manufacturer?: string;
+  batchNumber?: string;
+  expiryDate?: string;
+  dose?: string;
+  route?: "oral" | "iv" | "im" | "sc" | "topical" | "inhalation" | "rectal" | "other";
+  frequency?: string;
+  therapyStartDate?: string;
+  therapyStopDate?: string;
+  indication?: string;
+  /** Did the reaction stop after withdrawing the suspect drug? */
+  dechallenge?: "yes" | "no" | "unknown" | "na";
+  /** Did the reaction reappear when re-introducing the suspect drug? */
+  rechallenge?: "yes" | "no" | "unknown" | "na";
+
+  // ── D. Concomitant medical product (PvPI §D) ────────────────────────────
+  concomitantMedicines?: string;
+
+  // ── E. Other relevant history (PvPI §E) ─────────────────────────────────
+  relevantHistory?: string;
+  relevantTests?: string;
+
+  // ── F. Reporter (PvPI §F) ───────────────────────────────────────────────
+  reporterName?: string;
+  reporterContact?: string;
+  reporterPincode?: string;
+  reporterQualification?: "physician" | "pharmacist" | "nurse" | "patient" | "caregiver" | "other";
+
+  // ── Routing flags ───────────────────────────────────────────────────────
+  /** True for any ASU&H drug (Ayurveda / Siddha / Unani / Homeopathy) — routes to AIIA */
+  forwardToAIIA: boolean;
+  /** True for any allopathic / OTC / herbal-supplement drug — routes to PvPI */
+  forwardToPvPI: boolean;
+
+  // Free-form notes from the legacy form (kept for backwards compatibility)
+  notes?: string;
+  doctorNotified?: boolean;
   status: "pending_review" | "reviewed" | "forwarded";
   reportedAt: number;
 }
