@@ -65,6 +65,16 @@ function normalizeReply(reply: string): string {
   return out;
 }
 
+function looksIncomplete(reply: string): boolean {
+  const t = reply.trim();
+  if (!t) return true;
+  if (t.length < 90) return true;
+  if (/(^|\n)\s*\d+\.\s*$/.test(t)) return true; // ends with "1." style fragment
+  if (/(^|\n)\s*[-*]\s*$/.test(t)) return true;   // dangling bullet
+  if (!/[.!?]"?$/.test(t)) return true;           // no sentence ending
+  return false;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { message, language, history } = (await req.json()) as {
@@ -84,34 +94,68 @@ export async function POST(req: NextRequest) {
       .map((h) => `${h.role === "user" ? "User" : "Assistant"}: ${h.text}`)
       .join("\n");
 
-    const response = await ai.models.generateContent({
-      model: TASK_MODEL.symptomFollowUp,
-      contents: [
-        {
-          role: "user",
-          parts: [{
-            text:
+    const basePrompt =
 `${SYSTEM_PROMPT(langName)}
 
 Conversation so far:
 ${historyBlock || "(no previous conversation)"}
 
 Latest user question: ${message}
-`
-          }],
+
+Important formatting:
+- Do not use numbered list headings like "1." / "2." at top level.
+- Use short titled sections with full sentences.
+- Ensure the answer is complete and not cut off.`;
+
+    const response = await ai.models.generateContent({
+      model: TASK_MODEL.symptomFollowUp,
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: basePrompt }],
         },
       ],
       config: {
-        temperature: 0.7,
+        temperature: 0.55,
         topP: 0.9,
         maxOutputTokens: 420,
         safetySettings: SAFETY_SETTINGS,
       },
     });
 
-    const rawReply = extractTextFromResponse(response)
-      || "I couldn't generate a response. Please try again.";
-    const reply = normalizeReply(rawReply);
+    let rawReply = extractTextFromResponse(response);
+    let reply = normalizeReply(rawReply || "");
+
+    // Auto-retry once if Gemini returns a truncated/fragmented answer.
+    if (looksIncomplete(reply)) {
+      const retry = await ai.models.generateContent({
+        model: TASK_MODEL.symptomFollowUp,
+        contents: [
+          {
+            role: "user",
+            parts: [{
+              text:
+`${basePrompt}
+
+Your previous draft was incomplete/truncated. Rewrite fully now in complete sentences.
+Do not stop mid-list. Keep it concise and practical.`
+            }],
+          },
+        ],
+        config: {
+          temperature: 0.45,
+          topP: 0.85,
+          maxOutputTokens: 500,
+          safetySettings: SAFETY_SETTINGS,
+        },
+      });
+      rawReply = extractTextFromResponse(retry);
+      reply = normalizeReply(rawReply || "");
+    }
+
+    if (!reply) {
+      reply = "I could not complete the answer just now. Please retry once, and if symptoms are present, use Doctor Share for quick review. This is for awareness, not diagnosis. Talk to a doctor or pharmacist.";
+    }
 
     return NextResponse.json({ reply });
   } catch (err) {
