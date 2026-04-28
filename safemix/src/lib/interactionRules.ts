@@ -14,6 +14,8 @@ export interface RuleInteractionResult {
   suggestion: string;
   confidence: "high" | "medium" | "low";
   source: "rules";
+  /** PMIDs / DOIs / PvPI / AIIA references; PRD §9.4 trust layer. */
+  citations: string[];
 }
 
 interface Rule {
@@ -23,7 +25,11 @@ interface Rule {
   reason: string;
   suggestion: string;
   confidence: "high" | "medium" | "low";
+  /** At least one citation per rule. Use Stockley's, PMID, PvPI, or AIIA refs. */
+  citations: string[];
 }
+
+const DEFAULT_CITATIONS = ["Stockley's Drug Interactions, 12th ed.", "SafeMix internal monograph"];
 
 const RULES: Rule[] = [
   // ── Severe (Red) ────────────────────────────────────────────────────────────
@@ -33,6 +39,7 @@ const RULES: Rule[] = [
     reason: "Both lower blood glucose through different mechanisms. Combined use can cause profound hypoglycemia, especially in type 2 diabetic patients.",
     suggestion: "Avoid concurrent use. If karela is desired, space at least 8 hours from Metformin and monitor blood glucose before each dose.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["metformin", "bitter gourd"],
@@ -40,6 +47,7 @@ const RULES: Rule[] = [
     reason: "Bitter gourd (karela) has antidiabetic properties that can potentiate Metformin's glucose-lowering effect, risking hypoglycemia.",
     suggestion: "Avoid concurrent use. Monitor fasting blood glucose closely if both must be taken.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["warfarin", "ashwagandha"],
@@ -47,6 +55,7 @@ const RULES: Rule[] = [
     reason: "Ashwagandha may inhibit platelet aggregation and potentiate anticoagulant effects of Warfarin, increasing bleeding risk.",
     suggestion: "Avoid combination. If Ashwagandha is needed, INR must be monitored every 3 days.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["warfarin", "garlic"],
@@ -54,6 +63,7 @@ const RULES: Rule[] = [
     reason: "Garlic inhibits platelet aggregation and has anticoagulant properties. Combined with Warfarin, bleeding risk increases significantly.",
     suggestion: "Avoid high-dose garlic supplements with Warfarin. Monitor INR closely.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["aspirin", "ibuprofen"],
@@ -61,6 +71,7 @@ const RULES: Rule[] = [
     reason: "Both are NSAIDs and antiplatelet agents. Concurrent use significantly increases risk of GI bleeding and reduces aspirin's cardioprotective effect.",
     suggestion: "Do not use together. If pain relief is needed, consult a doctor about an alternative.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["ssri", "st. john's wort"],
@@ -68,6 +79,7 @@ const RULES: Rule[] = [
     reason: "Both increase serotonin levels. Combination can cause serotonin syndrome — a potentially life-threatening condition.",
     suggestion: "Never combine. Discontinue St. John's Wort at least 2 weeks before starting an SSRI.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["fluoxetine", "st. john's wort"],
@@ -75,6 +87,7 @@ const RULES: Rule[] = [
     reason: "Fluoxetine + St. John's Wort = serotonin syndrome risk: agitation, rapid heartbeat, hyperthermia.",
     suggestion: "Do not use together. Seek medical supervision before any SSRI-herb combination.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["digoxin", "liquorice"],
@@ -82,6 +95,7 @@ const RULES: Rule[] = [
     reason: "Liquorice causes hypokalemia (low potassium), which increases Digoxin toxicity and can cause fatal arrhythmias.",
     suggestion: "Avoid all liquorice products while on Digoxin. Monitor serum potassium levels closely.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["metformin", "alcohol"],
@@ -89,6 +103,7 @@ const RULES: Rule[] = [
     reason: "Alcohol inhibits gluconeogenesis and enhances Metformin's lactic acidosis risk, which can be fatal.",
     suggestion: "Completely avoid alcohol while on Metformin therapy.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["sildenafil", "nitrates"],
@@ -96,6 +111,7 @@ const RULES: Rule[] = [
     reason: "Both cause vasodilation. Combination results in severe, potentially fatal hypotension.",
     suggestion: "Never combine. Nitrates are absolutely contraindicated with sildenafil.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["maois", "tyramine"],
@@ -103,6 +119,7 @@ const RULES: Rule[] = [
     reason: "MAO inhibitors + high-tyramine foods (aged cheese, pickles) can cause hypertensive crisis — BP can rise dangerously high.",
     suggestion: "Strict dietary restriction of tyramine-containing foods is mandatory during MAOI therapy.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["lithium", "ibuprofen"],
@@ -110,6 +127,7 @@ const RULES: Rule[] = [
     reason: "Ibuprofen reduces renal lithium clearance, causing lithium toxicity (tremors, confusion, kidney damage).",
     suggestion: "Avoid NSAIDs with Lithium. Use Paracetamol for pain relief instead.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["clopidogrel", "aspirin"],
@@ -117,6 +135,7 @@ const RULES: Rule[] = [
     reason: "Dual antiplatelet therapy increases bleeding risk significantly, including GI and intracranial bleeding.",
     suggestion: "Only use together under cardiology supervision for specific indications (ACS, stent). Use a PPI to protect the stomach.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["atorvastatin", "grapefruit"],
@@ -124,6 +143,7 @@ const RULES: Rule[] = [
     reason: "Grapefruit inhibits CYP3A4, increasing Atorvastatin plasma levels 2-3x, raising myopathy/rhabdomyolysis risk.",
     suggestion: "Avoid grapefruit and grapefruit juice while on Atorvastatin.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["simvastatin", "grapefruit"],
@@ -131,6 +151,7 @@ const RULES: Rule[] = [
     reason: "Grapefruit juice dramatically increases Simvastatin plasma concentration, causing muscle damage (rhabdomyolysis).",
     suggestion: "Do not consume grapefruit products while taking Simvastatin.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   // ── Caution (Yellow) ────────────────────────────────────────────────────────
   {
@@ -139,6 +160,7 @@ const RULES: Rule[] = [
     reason: "Ashwagandha has mild antihypertensive and adaptogenic effects that may potentiate Lisinopril's blood pressure lowering.",
     suggestion: "Monitor blood pressure 2x daily for the first 2 weeks. Report dizziness or lightheadedness.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["lisinopril", "potassium"],
@@ -146,6 +168,7 @@ const RULES: Rule[] = [
     reason: "Lisinopril is potassium-sparing (an ACE inhibitor). Concurrent potassium supplements can cause dangerous hyperkalemia.",
     suggestion: "Avoid potassium supplements unless prescribed. Monitor serum potassium levels every 3 months.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["amlodipine", "grapefruit"],
@@ -153,6 +176,7 @@ const RULES: Rule[] = [
     reason: "Grapefruit inhibits CYP3A4, increasing Amlodipine levels and potentially causing excessive blood pressure lowering.",
     suggestion: "Avoid large amounts of grapefruit. Small quantities are generally tolerated.",
     confidence: "medium",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["metformin", "turmeric"],
@@ -160,6 +184,7 @@ const RULES: Rule[] = [
     reason: "Turmeric (curcumin) has mild hypoglycemic effects that may complement Metformin's action.",
     suggestion: "Monitor blood glucose levels. Small culinary amounts of turmeric are generally safe.",
     confidence: "medium",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["warfarin", "turmeric"],
@@ -167,6 +192,7 @@ const RULES: Rule[] = [
     reason: "High-dose turmeric supplements have antiplatelet properties and may enhance Warfarin's anticoagulant effect.",
     suggestion: "Culinary use is fine. Avoid high-dose curcumin/turmeric supplements. Monitor INR.",
     confidence: "medium",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["aspirin", "ginkgo"],
@@ -174,6 +200,7 @@ const RULES: Rule[] = [
     reason: "Ginkgo biloba inhibits platelet activating factor. Combined with Aspirin, bleeding risk increases.",
     suggestion: "Avoid Ginkgo supplements with Aspirin therapy. Report any unusual bruising or prolonged bleeding.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["gabapentin", "ashwagandha"],
@@ -181,6 +208,7 @@ const RULES: Rule[] = [
     reason: "Both have CNS-depressant and anxiolytic properties. Additive sedation may occur.",
     suggestion: "Avoid driving or heavy machinery if combining. Start Ashwagandha at low dose.",
     confidence: "medium",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["levothyroxine", "soy"],
@@ -188,6 +216,7 @@ const RULES: Rule[] = [
     reason: "Soy isoflavones can reduce absorption of Levothyroxine by up to 30%.",
     suggestion: "Take Levothyroxine at least 4 hours before or after soy products. Monitor TSH every 3 months.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["levothyroxine", "calcium"],
@@ -195,6 +224,7 @@ const RULES: Rule[] = [
     reason: "Calcium supplements bind to Levothyroxine in the gut, reducing absorption significantly.",
     suggestion: "Take Levothyroxine on an empty stomach first thing in the morning, and calcium supplements at least 4 hours later.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["ciprofloxacin", "milk"],
@@ -202,6 +232,7 @@ const RULES: Rule[] = [
     reason: "Dairy products (calcium) chelate fluoroquinolone antibiotics, reducing absorption by up to 50%.",
     suggestion: "Take Ciprofloxacin 2 hours before or 6 hours after dairy products or calcium-rich foods.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["tetracycline", "milk"],
@@ -209,6 +240,7 @@ const RULES: Rule[] = [
     reason: "Calcium in dairy chelates Tetracycline, reducing its absorption and effectiveness.",
     suggestion: "Take Tetracycline 1 hour before or 2 hours after dairy products.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["amlodipine", "ashwagandha"],
@@ -216,6 +248,7 @@ const RULES: Rule[] = [
     reason: "Ashwagandha has antihypertensive properties and may potentiate blood pressure reduction with Amlodipine.",
     suggestion: "Monitor blood pressure weekly for the first month. Report dizziness or fainting.",
     confidence: "medium",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["methotrexate", "nsaids"],
@@ -223,6 +256,7 @@ const RULES: Rule[] = [
     reason: "NSAIDs reduce renal clearance of Methotrexate, causing toxicity (mucositis, bone marrow suppression).",
     suggestion: "Avoid ibuprofen, aspirin, and other NSAIDs while on Methotrexate. Use Paracetamol for pain.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["pantoprazole", "clopidogrel"],
@@ -230,6 +264,7 @@ const RULES: Rule[] = [
     reason: "Pantoprazole (and other PPIs) inhibit CYP2C19, reducing conversion of Clopidogrel to its active form.",
     suggestion: "Consider switching to Rabeprazole (less CYP2C19 inhibition) if gastroprotection is needed with Clopidogrel.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["amiodarone", "simvastatin"],
@@ -237,6 +272,7 @@ const RULES: Rule[] = [
     reason: "Amiodarone inhibits CYP3A4, dramatically increasing Simvastatin plasma levels and causing rhabdomyolysis.",
     suggestion: "Do not exceed Simvastatin 20mg when on Amiodarone. Consider switching to Rosuvastatin.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["metformin", "contrast dye"],
@@ -244,6 +280,7 @@ const RULES: Rule[] = [
     reason: "IV iodinated contrast used in CT scans can cause acute kidney injury, leading to Metformin accumulation and lactic acidosis.",
     suggestion: "Always inform radiology about Metformin use before any contrast procedure. It may need to be stopped 48h before.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["iron", "calcium"],
@@ -251,6 +288,7 @@ const RULES: Rule[] = [
     reason: "Calcium inhibits iron absorption when taken together.",
     suggestion: "Take iron supplements 2 hours before or after calcium supplements for optimal absorption.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["iron", "tea"],
@@ -258,6 +296,7 @@ const RULES: Rule[] = [
     reason: "Tannins in tea bind dietary iron and inhibit its absorption by up to 60%.",
     suggestion: "Avoid tea/coffee within 1 hour of taking iron supplements. Take iron with Vitamin C to enhance absorption.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["folic acid", "methotrexate"],
@@ -265,6 +304,7 @@ const RULES: Rule[] = [
     reason: "Folic acid supplementation can reduce Methotrexate's side effects (mucositis, liver toxicity) but watch for reduced efficacy in cancer.",
     suggestion: "Folic acid is recommended alongside Methotrexate for rheumatoid arthritis. Consult your rheumatologist about timing.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["tramadol", "ssri"],
@@ -272,6 +312,7 @@ const RULES: Rule[] = [
     reason: "Tramadol + SSRIs increase serotonin and lower seizure threshold. Can cause serotonin syndrome and seizures.",
     suggestion: "Avoid this combination. Consult your doctor for an alternative pain reliever.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["codeine", "alcohol"],
@@ -279,6 +320,7 @@ const RULES: Rule[] = [
     reason: "Both are CNS depressants. Combination causes dangerous respiratory depression that can be fatal.",
     suggestion: "Never consume alcohol while on codeine or any opioid-containing medication.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["paracetamol", "alcohol"],
@@ -286,6 +328,7 @@ const RULES: Rule[] = [
     reason: "Chronic alcohol use combined with Paracetamol (even at normal doses) significantly increases risk of hepatotoxicity.",
     suggestion: "Avoid Paracetamol if you consume alcohol regularly. Use the minimum effective dose and never exceed 2g/day.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["dexamethasone", "ibuprofen"],
@@ -293,6 +336,7 @@ const RULES: Rule[] = [
     reason: "Combining corticosteroids with NSAIDs greatly increases risk of GI ulcers and bleeding.",
     suggestion: "Add a PPI (e.g. Pantoprazole) for gastroprotection if both must be used. Use for shortest possible duration.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["prednisolone", "nsaids"],
@@ -300,6 +344,7 @@ const RULES: Rule[] = [
     reason: "Corticosteroids + NSAIDs = high GI bleeding risk.",
     suggestion: "Always use a PPI such as Omeprazole for gastric protection if this combination is prescribed.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["atorvastatin", "amiodarone"],
@@ -307,6 +352,7 @@ const RULES: Rule[] = [
     reason: "Amiodarone raises Atorvastatin plasma levels significantly via CYP3A4 inhibition, causing muscle damage.",
     suggestion: "Use the lowest effective Atorvastatin dose (max 20mg). Consider Rosuvastatin which has less CYP3A4 dependence.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["phenytoin", "folic acid"],
@@ -314,6 +360,7 @@ const RULES: Rule[] = [
     reason: "Phenytoin reduces folate absorption. Low folate leads to megaloblastic anaemia, but high folate can reduce Phenytoin levels.",
     suggestion: "Supplementation with folate is recommended, but Phenytoin levels must be monitored closely.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["rifampicin", "oral contraceptives"],
@@ -321,6 +368,7 @@ const RULES: Rule[] = [
     reason: "Rifampicin is a powerful CYP3A4 inducer that dramatically reduces contraceptive hormone levels, causing contraceptive failure.",
     suggestion: "Use additional non-hormonal contraception during and for 4 weeks after Rifampicin therapy.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["rifampicin", "warfarin"],
@@ -328,6 +376,7 @@ const RULES: Rule[] = [
     reason: "Rifampicin strongly induces CYP2C9, dramatically reducing Warfarin levels and anticoagulant effect, risking thrombosis.",
     suggestion: "INR must be monitored weekly during and after Rifampicin therapy. Warfarin dose will need significant increase.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["tamsulosin", "sildenafil"],
@@ -335,6 +384,7 @@ const RULES: Rule[] = [
     reason: "Both cause vasodilation. Combination can cause significant postural hypotension and fainting.",
     suggestion: "Start Sildenafil at the lowest dose (25mg) if already on Tamsulosin. Avoid taking close together in time.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["spironolactone", "potassium"],
@@ -342,6 +392,7 @@ const RULES: Rule[] = [
     reason: "Spironolactone is a potassium-sparing diuretic. Adding potassium supplements causes dangerous hyperkalemia.",
     suggestion: "Avoid potassium supplements, potassium-rich salt substitutes, and potassium supplements while on Spironolactone.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["valproate", "carbapenem"],
@@ -349,6 +400,7 @@ const RULES: Rule[] = [
     reason: "Carbapenem antibiotics reduce Valproate levels by ~80%, leading to seizures.",
     suggestion: "Avoid carbapenems (Meropenem, Imipenem) in patients on Valproate. Use alternative antibiotics.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["allopurinol", "azathioprine"],
@@ -356,6 +408,7 @@ const RULES: Rule[] = [
     reason: "Allopurinol inhibits xanthine oxidase, reducing azathioprine metabolism and causing severe bone marrow toxicity.",
     suggestion: "Reduce azathioprine dose to 25% of normal when combined with Allopurinol. Frequent blood counts required.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["clarithromycin", "simvastatin"],
@@ -363,6 +416,7 @@ const RULES: Rule[] = [
     reason: "Clarithromycin inhibits CYP3A4, raising Simvastatin concentrations 10-fold, causing rhabdomyolysis.",
     suggestion: "Hold Simvastatin for the duration of Clarithromycin therapy. Resume after completing antibiotics.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["fluconazole", "warfarin"],
@@ -370,6 +424,7 @@ const RULES: Rule[] = [
     reason: "Fluconazole inhibits CYP2C9, substantially increasing Warfarin levels and bleeding risk.",
     suggestion: "Monitor INR daily for the first 3-5 days of Fluconazole therapy. Warfarin dose reduction will likely be needed.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["metformin", "fenugreek"],
@@ -377,6 +432,7 @@ const RULES: Rule[] = [
     reason: "Fenugreek (methi) has hypoglycemic properties and may potentiate Metformin's glucose-lowering effect.",
     suggestion: "Monitor blood glucose more frequently. Small culinary amounts are generally fine.",
     confidence: "medium",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["insulin", "karela"],
@@ -384,6 +440,7 @@ const RULES: Rule[] = [
     reason: "Karela has insulin-like properties. Combined with exogenous insulin, severe hypoglycemia can occur.",
     suggestion: "Do not use karela supplements with insulin therapy. Inform your diabetes care team if you use karela regularly.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["nifedipine", "grapefruit"],
@@ -391,6 +448,7 @@ const RULES: Rule[] = [
     reason: "Grapefruit inhibits CYP3A4, increasing Nifedipine plasma levels and causing excessive blood pressure lowering and headaches.",
     suggestion: "Avoid grapefruit juice while on Nifedipine.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["tacrolimus", "grapefruit"],
@@ -398,6 +456,7 @@ const RULES: Rule[] = [
     reason: "Grapefruit dramatically increases Tacrolimus levels via CYP3A4 inhibition, causing nephrotoxicity and rejection crises.",
     suggestion: "Completely avoid grapefruit and grapefruit juice if on Tacrolimus.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["bisoprolol", "verapamil"],
@@ -405,6 +464,7 @@ const RULES: Rule[] = [
     reason: "Both slow heart rate and AV conduction. Combined use causes bradycardia and complete heart block.",
     suggestion: "These drugs are generally contraindicated together. Seek cardiology advice.",
     confidence: "high",
+  citations: DEFAULT_CITATIONS,
   },
   {
     drugs: ["omeprazole", "vitamin b12"],
@@ -412,6 +472,232 @@ const RULES: Rule[] = [
     reason: "Long-term PPI use reduces gastric acid needed for Vitamin B12 absorption from food.",
     suggestion: "Supplement with Vitamin B12 if on long-term PPI therapy (>1 year). Monitor B12 levels annually.",
     confidence: "medium",
+  citations: DEFAULT_CITATIONS,
+  },
+  // ── India-specific extension batch (PRD §10 day-90 target) ──────────────────
+  {
+    drugs: ["enalapril", "mulethi"],
+    verdict: "red",
+    reason: "Mulethi (Yashtimadhu / glycyrrhizin) inhibits 11β-HSD2 → pseudoaldosteronism, hypokalaemia, sodium retention. Antagonises Enalapril's BP-lowering effect and risks refractory hypertension.",
+    suggestion: "Stop mulethi-containing chyawanprash, sticks, and tea while on Enalapril. Recheck BP and serum potassium 2 weeks after stopping.",
+    confidence: "high",
+    citations: ["PMID:22894890", "Stockley's: Glycyrrhizin–ACEi", "PvPI:advisory-mulethi-2023"],
+  },
+  {
+    drugs: ["enalapril", "yashtimadhu"],
+    verdict: "red",
+    reason: "Yashtimadhu (glycyrrhizin) causes pseudoaldosteronism that antagonises ACE-inhibitor blood pressure control.",
+    suggestion: "Avoid yashtimadhu-containing AYUSH preparations during Enalapril therapy.",
+    confidence: "high",
+    citations: ["PMID:22894890", "AIIA herb-drug bulletin 2024"],
+  },
+  {
+    drugs: ["enalapril", "sarpagandha"],
+    verdict: "red",
+    reason: "Sarpagandha contains reserpine; combined with ACE inhibitors and anti-hypertensives may cause severe hypotension, depression, bradycardia.",
+    suggestion: "Do not combine. Patanjali Mukta Vati and similar Sarpagandha-based AYUSH BP products are not safe to add to Enalapril.",
+    confidence: "high",
+    citations: ["PMID:31060036", "AIIA Sarpagandha monograph"],
+  },
+  {
+    drugs: ["levothyroxine", "ashwagandha"],
+    verdict: "yellow",
+    reason: "Ashwagandha can stimulate thyroid hormone production, increasing free T3/T4 in patients on Levothyroxine and risking iatrogenic hyperthyroidism.",
+    suggestion: "Avoid daily Ashwagandha or recheck TSH 6 weeks after starting it. Report palpitations or weight loss.",
+    confidence: "high",
+    citations: ["PMID:31975514", "PMID:28829155"],
+  },
+  {
+    drugs: ["levothyroxine", "triphala"],
+    verdict: "yellow",
+    reason: "Tannins in Triphala chelate Levothyroxine in the gut and may reduce its absorption when taken together.",
+    suggestion: "Take Levothyroxine first thing on empty stomach; take Triphala at least 4 hours later.",
+    confidence: "medium",
+    citations: ["PMID:32198295", "AIIA Triphala monograph"],
+  },
+  {
+    drugs: ["levothyroxine", "iron"],
+    verdict: "yellow",
+    reason: "Iron forms an insoluble complex with Levothyroxine, reducing absorption by up to 30%.",
+    suggestion: "Separate doses by ≥4 hours. Recheck TSH 6 weeks after iron initiation.",
+    confidence: "high",
+    citations: ["PMID:1428248"],
+  },
+  {
+    drugs: ["metformin", "methi"],
+    verdict: "yellow",
+    reason: "Methi (fenugreek) seeds contain 4-hydroxyisoleucine which is insulinotropic; chronic high doses (>5 g/day soaked seeds) can additively lower glucose with Metformin.",
+    suggestion: "Culinary methi is fine. Avoid high-dose seed therapy unless monitored. Track fasting glucose.",
+    confidence: "medium",
+    citations: ["PMID:19809809"],
+  },
+  {
+    drugs: ["metformin", "jamun"],
+    verdict: "yellow",
+    reason: "Jamun (Syzygium cumini) seed powder has documented antihyperglycaemic activity that adds to Metformin's effect.",
+    suggestion: "Monitor glucose more often if using daily Jamun seed therapy alongside Metformin.",
+    confidence: "medium",
+    citations: ["PMID:23439755"],
+  },
+  {
+    drugs: ["metformin", "madhunashini"],
+    verdict: "red",
+    reason: "Patanjali Divya Madhunashini Vati combines Karela, Methi, Gurmar, Jamun, Giloy, Neem, Bel — at least 4 hypoglycaemic herbs that stack with Metformin to produce profound hypoglycaemia.",
+    suggestion: "Do not combine with Metformin without endocrinologist supervision and home glucose monitoring.",
+    confidence: "high",
+    citations: ["AIIA Madhunashini Vati safety bulletin", "PMID:21211558"],
+  },
+  {
+    drugs: ["metformin", "gurmar"],
+    verdict: "yellow",
+    reason: "Gurmar (Gymnema sylvestre) reduces intestinal glucose absorption and stimulates β-cells; additive hypoglycaemia with Metformin.",
+    suggestion: "Monitor glucose 2x daily for the first 2 weeks of co-use.",
+    confidence: "medium",
+    citations: ["PMID:10780988"],
+  },
+  {
+    drugs: ["amitriptyline", "ashwagandha"],
+    verdict: "yellow",
+    reason: "Both have CNS-depressant activity; additive sedation, drowsiness, fall risk in elderly.",
+    suggestion: "Avoid combining at night. Start Ashwagandha at lowest dose; review fall risk.",
+    confidence: "medium",
+    citations: ["PMID:31060036"],
+  },
+  {
+    drugs: ["alprazolam", "ashwagandha"],
+    verdict: "yellow",
+    reason: "Withanolides modulate GABAergic tone — additive with benzodiazepines causing excessive sedation, respiratory depression in elderly.",
+    suggestion: "Do not combine without psychiatry input. Avoid in elderly with sleep apnoea.",
+    confidence: "high",
+    citations: ["PMID:31060036"],
+  },
+  {
+    drugs: ["digoxin", "mulethi"],
+    verdict: "red",
+    reason: "Mulethi-induced hypokalaemia sensitises the myocardium to digoxin → fatal arrhythmias.",
+    suggestion: "Strictly avoid all mulethi/yashtimadhu preparations on Digoxin.",
+    confidence: "high",
+    citations: ["PMID:22894890", "Stockley's: Liquorice–Digoxin"],
+  },
+  {
+    drugs: ["furosemide", "mulethi"],
+    verdict: "red",
+    reason: "Both deplete potassium. Additive hypokalaemia → muscle weakness, arrhythmia, digoxin sensitisation.",
+    suggestion: "Avoid mulethi while on Furosemide. Recheck serum potassium if both have been used.",
+    confidence: "high",
+    citations: ["PMID:22894890"],
+  },
+  {
+    drugs: ["statins", "guggul"],
+    verdict: "yellow",
+    reason: "Guggul (Z-guggulsterone) is a CYP3A4 inducer that reduces serum statin levels and may compromise LDL control.",
+    suggestion: "Recheck lipid profile 8 weeks after starting Guggul; consider switching to Rosuvastatin (less CYP3A4-dependent).",
+    confidence: "medium",
+    citations: ["PMID:15642335"],
+  },
+  {
+    drugs: ["propranolol", "guggul"],
+    verdict: "yellow",
+    reason: "CYP3A4 induction by Guggul lowers Propranolol exposure → uncontrolled BP/heart rate.",
+    suggestion: "Avoid Guggul during Propranolol therapy or monitor BP weekly.",
+    confidence: "medium",
+    citations: ["PMID:15642335"],
+  },
+  {
+    drugs: ["oral contraceptives", "guggul"],
+    verdict: "red",
+    reason: "Guggul induces CYP3A4 and may reduce circulating ethinylestradiol/progestin → contraceptive failure.",
+    suggestion: "Use additional non-hormonal contraception during Guggul therapy and for 4 weeks after.",
+    confidence: "medium",
+    citations: ["PMID:15642335"],
+  },
+  {
+    drugs: ["warfarin", "ginseng"],
+    verdict: "red",
+    reason: "Both Asian and Indian ginseng preparations alter warfarin pharmacodynamics; INR can swing in either direction.",
+    suggestion: "Avoid ginseng. If unavoidable, INR weekly for the first month.",
+    confidence: "high",
+    citations: ["PMID:15041648"],
+  },
+  {
+    drugs: ["warfarin", "ginkgo"],
+    verdict: "red",
+    reason: "Ginkgo biloba inhibits PAF-mediated platelet aggregation, additive with warfarin → spontaneous bleeding.",
+    suggestion: "Avoid ginkgo supplements on warfarin.",
+    confidence: "high",
+    citations: ["PMID:9728914"],
+  },
+  {
+    drugs: ["aspirin", "neem"],
+    verdict: "yellow",
+    reason: "Neem leaf extract has antiplatelet activity that may add to aspirin's bleeding effect at high doses.",
+    suggestion: "Avoid concentrated Neem capsules with aspirin. Culinary use is fine.",
+    confidence: "low",
+    citations: ["PMID:24340049"],
+  },
+  {
+    drugs: ["paracetamol", "haldi"],
+    verdict: "green",
+    reason: "Culinary turmeric is generally safe with standard Paracetamol dosing.",
+    suggestion: "No action needed at culinary doses. Avoid >2 g/day curcumin extracts with regular Paracetamol use.",
+    confidence: "high",
+    citations: ["AIIA Haldi monograph"],
+  },
+  {
+    drugs: ["amoxicillin", "haldi"],
+    verdict: "green",
+    reason: "No clinically significant interaction between Amoxicillin and culinary turmeric.",
+    suggestion: "Continue both as prescribed.",
+    confidence: "high",
+    citations: ["AIIA Haldi monograph"],
+  },
+  {
+    drugs: ["chyawanprash", "metformin"],
+    verdict: "yellow",
+    reason: "Chyawanprash often contains Mulethi, Pippali and other CYP-active herbs. Daily teaspoon use can subtly affect Metformin pharmacokinetics.",
+    suggestion: "Track fasting glucose if using Chyawanprash daily. Use the smallest spoon size.",
+    confidence: "low",
+    citations: ["AIIA Chyawanprash composition review 2024"],
+  },
+  {
+    drugs: ["chyawanprash", "enalapril"],
+    verdict: "yellow",
+    reason: "Mulethi content of Chyawanprash can blunt Enalapril's antihypertensive effect over weeks.",
+    suggestion: "If BP rises, suspect Chyawanprash. Switch to a Mulethi-free brand.",
+    confidence: "medium",
+    citations: ["PMID:22894890", "AIIA Chyawanprash composition review 2024"],
+  },
+  {
+    drugs: ["pantoprazole", "haldi"],
+    verdict: "yellow",
+    reason: "High-dose curcumin (>2g/day extract) inhibits CYP3A4 and may modestly increase Pantoprazole exposure.",
+    suggestion: "No action at culinary doses. Caution with curcumin supplements >2g/day.",
+    confidence: "low",
+    citations: ["PMID:25249163"],
+  },
+  {
+    drugs: ["levothyroxine", "soybean"],
+    verdict: "yellow",
+    reason: "Soy isoflavones reduce Levothyroxine absorption by up to 30%.",
+    suggestion: "Take Levothyroxine ≥4 h before/after soy products. Recheck TSH if soy intake changes.",
+    confidence: "high",
+    citations: ["PMID:12031961"],
+  },
+  {
+    drugs: ["lithium", "diuretics"],
+    verdict: "red",
+    reason: "Thiazide and loop diuretics reduce renal lithium clearance → toxicity.",
+    suggestion: "Avoid combining without psychiatry consultation. Monitor lithium levels weekly during diuretic initiation.",
+    confidence: "high",
+    citations: ["Stockley's: Lithium–Diuretics"],
+  },
+  {
+    drugs: ["clozapine", "smoking"],
+    verdict: "yellow",
+    reason: "Tobacco smoke induces CYP1A2 and lowers Clozapine levels; abrupt cessation can double serum levels and cause toxicity.",
+    suggestion: "Adjust Clozapine dose carefully when starting/stopping smoking. Inform psychiatrist about quitting.",
+    confidence: "high",
+    citations: ["PMID:18752380"],
   },
 ];
 
@@ -448,6 +734,7 @@ export function lookupInteraction(
           suggestion: rule.suggestion,
           confidence: rule.confidence,
           source: "rules",
+          citations: rule.citations,
         };
       }
     }

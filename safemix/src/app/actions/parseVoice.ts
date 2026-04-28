@@ -1,5 +1,6 @@
 "use server";
-import { GoogleGenAI } from "@google/genai";
+import { getGeminiClient } from "@/lib/ai/client";
+import { TASK_MODEL, SAFETY_SETTINGS } from "@/lib/ai/routing";
 
 export interface ParsedMedicineFields {
   name: string;
@@ -28,16 +29,12 @@ Return ONLY a valid JSON object — no markdown, no explanation:
 }
 `;
 
-/** Parse a free-form voice transcript into structured medicine fields using Gemini. */
 export async function parseVoiceInput(transcript: string): Promise<ParsedMedicineFields> {
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) throw new Error("Gemini API key not configured.");
-
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = getGeminiClient();
 
   const prompt = `You are a clinical pharmacist AI. Today's date is ${today}.
 
-A patient described their medicine verbally in natural language (may be English, Hindi, or mixed). Extract structured data from this description:
+A patient described their medicine verbally in natural language (may be English, Hindi, Bengali, Tamil, Telugu, Odia, or mixed). Extract structured data from this description:
 
 "${transcript}"
 
@@ -52,8 +49,12 @@ Rules:
 `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: TASK_MODEL.voiceIntent,
     contents: [{ role: "user", parts: [{ text: prompt }] }],
+    config: {
+      safetySettings: SAFETY_SETTINGS,
+      temperature: 0.2,
+    },
   });
 
   if (!response.text) throw new Error("No response from Gemini.");

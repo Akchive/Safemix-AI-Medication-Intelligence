@@ -6,7 +6,7 @@ import {
   Printer, Download, Send, ChevronDown, ChevronUp, Loader2,
 } from "lucide-react";
 import Link from "next/link";
-import { verifyDoctorToken } from "@/lib/qrToken";
+import { decodeDoctorShareToken } from "@/app/actions/doctorShare";
 import {
   readPatientSnapshot, acknowledgeSnapshot, type PatientSnapshot,
 } from "@/lib/firebase/firestore";
@@ -79,7 +79,7 @@ export default function DoctorPortalScanPage() {
 
     (async () => {
       try {
-        const decoded = await verifyDoctorToken(token);
+        const decoded = await decodeDoctorShareToken(token);
         if (Date.now() >= decoded.expiry) { setStatus("expired"); return; }
 
         setPayload(decoded);

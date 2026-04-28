@@ -4,7 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { QrCode, Clock, Shield, Share2, ArrowRight, History, Copy, CheckCheck, CheckCircle } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
-import { generateDoctorToken, verifyDoctorToken } from "@/lib/qrToken";
+import { issueDoctorShareToken } from "@/app/actions/doctorShare";
 import { logShare, writePatientSnapshot, watchAcknowledgement } from "@/lib/firebase/firestore";
 import { getRegimen } from "@/lib/regimen";
 import { getCachedVerdicts } from "@/lib/interactionCache";
@@ -74,9 +74,8 @@ export default function DoctorSharePage() {
         const issued = Date.now();
         const expiryTime = issued + durationMs;
 
-        // Generate HMAC-SHA256 signed JWT — cannot be forged or tampered
-        const token = await generateDoctorToken(uid, durationMs);
-        const jwtPayload = await verifyDoctorToken(token);
+        // Server-side JWT signing — secret never leaves the server
+        const { token, payload: jwtPayload } = await issueDoctorShareToken(uid, durationMs);
         const jti = jwtPayload.jti;
         const encodedToken = encodeURIComponent(token);
 

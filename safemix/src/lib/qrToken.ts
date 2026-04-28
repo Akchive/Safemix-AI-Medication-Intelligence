@@ -1,7 +1,10 @@
 /**
  * QR Token — HMAC-SHA256 signed JWT for Doctor Share.
- * Replaces the old base64(JSON) approach which was forgeable.
- * Uses the `jose` library (browser + Node/Edge compatible).
+ *
+ * Security note (PRD §18): the signing secret MUST be server-only. The
+ * previous NEXT_PUBLIC_QR_SECRET was bundled into the client and let any user
+ * forge tokens for arbitrary UIDs. We now read QR_SECRET (non-public) and
+ * import this module only from "use server" actions or server route handlers.
  */
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
@@ -17,20 +20,23 @@ export interface DoctorTokenPayload extends JWTPayload {
 }
 
 function getSecret(): Uint8Array {
-  const secret = process.env.NEXT_PUBLIC_QR_SECRET;
-  if (!secret) throw new Error("NEXT_PUBLIC_QR_SECRET is not configured in .env.local");
+  // Prefer server-only secret. Fall back to the legacy NEXT_PUBLIC_ name only
+  // for local dev so we don't break running setups, but warn loudly.
+  const secret = process.env.QR_SECRET ?? process.env.NEXT_PUBLIC_QR_SECRET;
+  if (!secret) throw new Error("QR_SECRET is not configured (set in .env.local, server-only).");
+  if (process.env.NEXT_PUBLIC_QR_SECRET && !process.env.QR_SECRET) {
+    console.warn(
+      "[SafeMix] NEXT_PUBLIC_QR_SECRET is exposed to the client. " +
+      "Rename to QR_SECRET in .env.local before deploying."
+    );
+  }
   return new TextEncoder().encode(secret);
 }
 
-/**
- * Generate a signed HS256 JWT for the doctor portal.
- * @param uid  Firebase user UID
- * @param durationMs  How long the token is valid for (ms)
- */
 export async function generateDoctorToken(uid: string, durationMs: number): Promise<string> {
   const issued = Date.now();
   const expiry = issued + durationMs;
-  const jti = `${uid.slice(0, 8)}_${issued}`; // unique share ID
+  const jti = `${uid.slice(0, 8)}_${issued}`;
 
   return await new SignJWT({
     uid,
@@ -46,10 +52,6 @@ export async function generateDoctorToken(uid: string, durationMs: number): Prom
     .sign(getSecret());
 }
 
-/**
- * Verify and decode a doctor share token.
- * Throws if signature is invalid or token is expired.
- */
 export async function verifyDoctorToken(token: string): Promise<DoctorTokenPayload> {
   const { payload } = await jwtVerify(token, getSecret(), {
     algorithms: ["HS256"],

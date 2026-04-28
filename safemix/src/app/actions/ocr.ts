@@ -1,5 +1,6 @@
 "use server";
-import { GoogleGenAI } from "@google/genai";
+import { getGeminiClient } from "@/lib/ai/client";
+import { TASK_MODEL, SAFETY_SETTINGS } from "@/lib/ai/routing";
 
 export interface OcrExtractedData {
   name: string;
@@ -13,20 +14,17 @@ export interface OcrExtractedData {
 }
 
 export async function extractMedicineData(base64Image: string): Promise<OcrExtractedData> {
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) throw new Error("Gemini API key is not configured in .env.local");
-
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = getGeminiClient();
   const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, "");
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: TASK_MODEL.ocrExtract,
     contents: [
       {
         role: "user",
         parts: [
           {
-            text: `You are a pharmacist AI. Examine this image of a medicine strip, box, bottle, or prescription label.
+            text: `You are a pharmacist AI. Examine this image of a medicine strip, box, bottle, or prescription label written in any Indian script — Devanagari, Bengali, Tamil, Telugu, Odia, Kannada, Malayalam, Gujarati, Punjabi, Urdu, or Latin.
 
 Extract ALL the following information visible in the image.
 
@@ -44,14 +42,18 @@ Return ONLY a valid JSON object (no markdown, no code blocks):
 
 Rules:
 - If it's a strip of tablets/capsules without brand text, try to read the printed foil text.
-- If it's Ayurvedic/herbal by name or ingredients, set system accordingly.
+- If it's Ayurvedic/herbal by name or ingredients, set system accordingly. Patanjali, Dabur, Himalaya, Baidyanath, Zandu = Ayurvedic by default unless the ingredients clearly say otherwise.
 - If dosage info is printed (e.g. '500 mg', 'Take 1 tablet twice a day'), extract it fully.
-- Set confidence to 'low' if the image is blurry or text is hard to read.`
+- Set confidence to 'low' if the image is blurry or text is hard to read.`,
           },
-          { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } }
-        ]
-      }
-    ]
+          { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } },
+        ],
+      },
+    ],
+    config: {
+      safetySettings: SAFETY_SETTINGS,
+      temperature: 0.1,
+    },
   });
 
   if (!response.text) throw new Error("No response from Gemini API");
