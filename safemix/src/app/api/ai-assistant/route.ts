@@ -13,6 +13,9 @@ Structure:
 1) Direct answer
 2) Why it matters (1 sentence)
 3) What to do now (2-3 bullets max)
+Never start every answer with the same greeting. Vary openings naturally.
+Do not repeat the same sentence across turns.
+If user asks a follow-up, directly continue from previous context.
 Never prescribe, diagnose, or give unsafe dosing advice.`;
 
 function extractTextFromResponse(response: any): string {
@@ -33,21 +36,44 @@ function extractTextFromResponse(response: any): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, language } = (await req.json()) as { message?: string; language?: LangCode };
+    const { message, language, history } = (await req.json()) as {
+      message?: string;
+      language?: LangCode;
+      history?: Array<{ role: "user" | "assistant"; text: string }>;
+    };
     if (!message?.trim()) return NextResponse.json({ reply: "Please ask a question." });
 
     const lang = (language ?? "en") as LangCode;
     const langName = LANG_NAME_FOR_PROMPT[lang] ?? "English";
     const ai = getGeminiClient();
 
+    const historyBlock = (history ?? [])
+      .filter((h) => h?.text?.trim())
+      .slice(-8)
+      .map((h) => `${h.role === "user" ? "User" : "Assistant"}: ${h.text}`)
+      .join("\n");
+
     const response = await ai.models.generateContent({
       model: TASK_MODEL.symptomFollowUp,
       contents: [
-        { role: "user", parts: [{ text: `${SYSTEM_PROMPT(langName)}\n\nUser question: ${message}` }] },
+        {
+          role: "user",
+          parts: [{
+            text:
+`${SYSTEM_PROMPT(langName)}
+
+Conversation so far:
+${historyBlock || "(no previous conversation)"}
+
+Latest user question: ${message}
+`
+          }],
+        },
       ],
       config: {
-        temperature: 0.4,
-        maxOutputTokens: 300,
+        temperature: 0.7,
+        topP: 0.9,
+        maxOutputTokens: 420,
         safetySettings: SAFETY_SETTINGS,
       },
     });

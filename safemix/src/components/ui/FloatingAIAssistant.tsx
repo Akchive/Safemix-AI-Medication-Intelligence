@@ -39,10 +39,11 @@ export default function FloatingAIAssistant() {
 
     try {
       const language = getLanguage() as LangCode;
+      const history = messages.slice(-8);
       const resp = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg, language }),
+        body: JSON.stringify({ message: userMsg, language, history }),
       });
       const data = await resp.json();
       setMessages(prev => [...prev, { role: "assistant", text: data.reply || "I'm having trouble answering that. Please try again." }]);
