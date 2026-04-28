@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/abdm/ops/cleanup-cron?token=${ABDM_OPS_CRON_TOKEN}&olderThanDays=7",
+      "schedule": "30 2 * * *"
+    }
+  ]
+}
+
