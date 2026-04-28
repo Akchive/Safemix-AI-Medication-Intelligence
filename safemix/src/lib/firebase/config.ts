@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 // Replace these with your actual Firebase project configuration later!
 const firebaseConfig = {
@@ -13,10 +14,18 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:000000000000:web:0000000000000000000000"
 };
 
-// Initialize Firebase only if it hasn't been initialized already
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Export the Firebase services so we can use them in the rest of the app
+if (typeof window !== "undefined") {
+  const appCheckSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY;
+  if (appCheckSiteKey) {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  }
+}
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
