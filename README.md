@@ -2,6 +2,8 @@
 
 SafeMix AI is an intelligent medication management and safety analysis platform designed to prevent adverse drug interactions and optimize patient health outcomes.
 
+Website Link: https://safemix-delta.vercel.app/
+
 ## Project Structure
 
 - `/safemix`: The core Next.js frontend application.
