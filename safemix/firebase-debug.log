@@ -1,0 +1,13 @@
+[debug] [2026-04-28T19:21:04.113Z] ----------------------------------------------------------------------
+[debug] [2026-04-28T19:21:04.123Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\likug\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js login --reauth
+[debug] [2026-04-28T19:21:04.125Z] CLI Version:   15.15.0
+[debug] [2026-04-28T19:21:04.125Z] Platform:      win32
+[debug] [2026-04-28T19:21:04.125Z] Node Version:  v24.2.0
+[debug] [2026-04-28T19:21:04.126Z] Time:          Wed Apr 29 2026 00:51:04 GMT+0530 (India Standard Time)
+[debug] [2026-04-28T19:21:04.126Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+[info] Visit this URL on this device to log in:
+[info] https://accounts.google.com/o/oauth2/auth?client_id=563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com&scope=email%20openid%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloudplatformprojects.readonly%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Ffirebase%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloud-platform&response_type=code&state=948899691&redirect_uri=http%3A%2F%2Flocalhost%3A9005
+[info] 
+[info] Waiting for authentication...

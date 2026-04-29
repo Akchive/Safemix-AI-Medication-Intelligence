@@ -11,7 +11,7 @@ import { parseVoiceInput, type ParsedMedicineFields } from "@/app/actions/parseV
 import CameraScanner from "@/components/ui/CameraScanner";
 import { searchMedicines, type MedicineSuggestion } from "@/lib/medicineList";
 import { saveVerdict } from "@/lib/interactionCache";
-import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
+import { trackEvent, AnalyticsEvents, getAnalyticsContext } from "@/lib/analytics";
 import {
   getRegimen, addToRegimen, removeFromRegimen, getRegimenNames,
   type RegimenMedicine,
@@ -299,7 +299,7 @@ export default function AddMedicinePage() {
         confidence: data.confidence,
         source: data.source,
       }, uid);
-      await trackEvent(AnalyticsEvents.INTERACTION_CHECK, { verdict: data.verdict, medicine: form.name.trim() });
+      await trackEvent(AnalyticsEvents.INTERACTION_CHECK, { verdict: data.verdict, medicine: form.name.trim(), ...getAnalyticsContext() });
     } catch (err: any) {
       setError(err.message || "Failed to check interactions. Please try again.");
     } finally {
@@ -335,7 +335,7 @@ export default function AddMedicinePage() {
     setAlternatives([]);
     setAlternativesSummary("");
     setAlternativesWarning("");
-    await trackEvent(AnalyticsEvents.ALTERNATIVES_CLICKED, { verdict: result.verdict, medicine: form.name.trim() });
+    await trackEvent(AnalyticsEvents.ALTERNATIVES_CLICKED, { verdict: result.verdict, medicine: form.name.trim(), ...getAnalyticsContext() });
 
     try {
       const out = await findAlternatives(form.name.trim(), form.system || "Unknown system", regimenNames);
@@ -344,17 +344,17 @@ export default function AddMedicinePage() {
       setAlternativesWarning(out.warning ?? "");
 
       if (out.alternatives.length > 0) {
-        await trackEvent(AnalyticsEvents.ALTERNATIVES_SUCCESS, { count: out.alternatives.length, medicine: form.name.trim() });
+        await trackEvent(AnalyticsEvents.ALTERNATIVES_SUCCESS, { count: out.alternatives.length, medicine: form.name.trim(), ...getAnalyticsContext() });
       } else if (out.warning) {
-        await trackEvent(AnalyticsEvents.ALTERNATIVES_FALLBACK, { medicine: form.name.trim() });
+        await trackEvent(AnalyticsEvents.ALTERNATIVES_FALLBACK, { medicine: form.name.trim(), ...getAnalyticsContext() });
       } else {
-        await trackEvent(AnalyticsEvents.ALTERNATIVES_FAILED, { medicine: form.name.trim() });
+        await trackEvent(AnalyticsEvents.ALTERNATIVES_FAILED, { medicine: form.name.trim(), ...getAnalyticsContext() });
       }
     } catch {
       setAlternatives([]);
       setAlternativesSummary("Could not fetch alternatives right now.");
       setAlternativesWarning("Please consult your doctor/pharmacist before changing medicines.");
-      await trackEvent(AnalyticsEvents.ALTERNATIVES_FAILED, { medicine: form.name.trim() });
+      await trackEvent(AnalyticsEvents.ALTERNATIVES_FAILED, { medicine: form.name.trim(), ...getAnalyticsContext() });
     } finally {
       setFindingAlternatives(false);
     }

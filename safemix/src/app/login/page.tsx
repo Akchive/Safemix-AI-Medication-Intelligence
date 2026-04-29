@@ -74,12 +74,11 @@ export default function LoginPage() {
   const handleGoogle = async () => {
     setError("");
     setLoading(true);
+    const provider = new GoogleAuthProvider();
+    const isMobile =
+      typeof window !== "undefined" &&
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
     try {
-      const provider = new GoogleAuthProvider();
-      const isMobile =
-        typeof window !== "undefined" &&
-        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-
       if (isMobile) {
         await signInWithRedirect(auth, provider);
         return;
@@ -88,10 +87,14 @@ export default function LoginPage() {
       await signInWithPopup(auth, provider);
       router.replace("/dashboard");
     } catch (e: any) {
-      if (e?.code === "auth/popup-closed-by-user") {
-        setError("Google sign-in popup was closed. Please retry, or use Phone OTP.");
-      } else if (e?.code === "auth/popup-blocked") {
-        setError("Google popup blocked by browser. Please retry, or use Phone OTP.");
+      if (e?.code === "auth/popup-closed-by-user" || e?.code === "auth/popup-blocked") {
+        // Fallback to redirect for browsers that block or suppress popups.
+        try {
+          await signInWithRedirect(auth, provider);
+          return;
+        } catch (redirectErr: any) {
+          setError(redirectErr?.message || "Google sign-in failed.");
+        }
       } else {
         setError(e.message || "Google sign-in failed.");
       }

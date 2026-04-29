@@ -8,6 +8,8 @@ import { doc, setDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase/config";
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   RecaptchaVerifier,
   signInWithPhoneNumber,
@@ -64,6 +66,36 @@ export default function SignupPage() {
     }
   }, []);
 
+  // Handle Google redirect result (mobile-safe auth flow)
+  useEffect(() => {
+    (async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (!result?.user) return;
+        const pendingRole = (typeof window !== "undefined" ? localStorage.getItem("safemix_pending_signup_role") : null) || role;
+        const pendingName = (typeof window !== "undefined" ? localStorage.getItem("safemix_pending_signup_name") : null) || name;
+        await initializeSelfRole(result.user.uid, pendingRole);
+        await getIdToken(result.user, true);
+        saveProfile(result.user.uid, result.user.displayName || pendingName || "User");
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("safemix_pending_signup_role");
+          localStorage.removeItem("safemix_pending_signup_name");
+        }
+        router.replace("/dashboard");
+      } catch (e: any) {
+        if (e?.code === "auth/popup-closed-by-user") {
+          setError("Google sign-in was interrupted. Please try again.");
+        } else if (e?.code) {
+          setError(`Google sign-in failed (${e.code}).`);
+        } else {
+          setError("Google sign-in failed. Please try again.");
+        }
+      }
+    })();
+    // Intentionally run once on mount; values are only fallback defaults.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const toggleCondition = (c: string) =>
     setConditions((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
 
@@ -96,13 +128,28 @@ export default function SignupPage() {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
+      const isMobile = typeof window !== "undefined" && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+      if (isMobile) {
+        // On mobile browsers, redirect flow is more reliable than popup.
+        localStorage.setItem("safemix_pending_signup_name", name.trim());
+        localStorage.setItem("safemix_pending_signup_role", role);
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+
       const cred = await signInWithPopup(auth, provider);
       await initializeSelfRole(cred.user.uid, role);
       await getIdToken(cred.user, true);
       saveProfile(cred.user.uid, cred.user.displayName || name);
       router.replace("/dashboard");
     } catch (e: any) {
-      setError(e.message || "Google sign-in failed.");
+      if (e?.code === "auth/popup-closed-by-user") {
+        setError("Google sign-in popup was closed. Please retry, or use Phone OTP below.");
+      } else if (e?.code === "auth/popup-blocked") {
+        setError("Popup blocked by browser. Please retry or use Phone OTP.");
+      } else {
+        setError(e.message || "Google sign-in failed.");
+      }
       setLoading(false);
     }
   };

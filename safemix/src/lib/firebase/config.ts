@@ -1,5 +1,11 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+  getAuth,
+  setPersistence,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
@@ -27,5 +33,20 @@ if (typeof window !== "undefined") {
 }
 
 export const auth = getAuth(app);
+
+if (typeof window !== "undefined") {
+  // Configure durable auth session with graceful fallback chain.
+  void (async () => {
+    try {
+      await setPersistence(auth, indexedDBLocalPersistence);
+    } catch {
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+      } catch {
+        await setPersistence(auth, browserSessionPersistence);
+      }
+    }
+  })();
+}
 export const db = getFirestore(app);
 export const storage = getStorage(app);

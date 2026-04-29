@@ -34,6 +34,24 @@ export async function trackEvent(
   }
 }
 
+export function getAnalyticsContext(params?: {
+  language?: string;
+  state?: string;
+  ageBand?: string;
+  deviceClass?: string;
+}): Record<string, string> {
+  const ramGB = (globalThis as any)?.navigator?.deviceMemory as number | undefined;
+  const inferredDeviceClass =
+    typeof ramGB === "number" ? (ramGB <= 3 ? "low" : ramGB <= 6 ? "mid" : "high") : "unknown";
+
+  return {
+    language: params?.language ?? "unknown",
+    state: params?.state ?? "unknown",
+    age_band: params?.ageBand ?? "unknown",
+    device_class: params?.deviceClass ?? inferredDeviceClass,
+  };
+}
+
 // Convenience named events
 export const AnalyticsEvents = {
   PAGE_VIEW: "page_view",

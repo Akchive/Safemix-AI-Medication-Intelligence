@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { QrCode, Clock, Shield, Share2, ArrowRight, History, Copy, CheckCheck, CheckCircle } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
+import { trackEvent, AnalyticsEvents, getAnalyticsContext } from "@/lib/analytics";
 import { issueDoctorShareToken } from "@/app/actions/doctorShare";
 import { logShare, writePatientSnapshot, watchAcknowledgement } from "@/lib/firebase/firestore";
 import { getRegimen } from "@/lib/regimen";
@@ -116,7 +116,7 @@ export default function DoctorSharePage() {
           logShare(user.uid, { token: encodedToken, issued, expiry: expiryTime, duration: expiry }).catch(console.error);
         }
 
-        await trackEvent(AnalyticsEvents.QR_GENERATED, { expiry });
+        await trackEvent(AnalyticsEvents.QR_GENERATED, { expiry, ...getAnalyticsContext() });
       } catch (err) {
         console.error("[SafeMix] Token generation failed:", err);
         setGenerating(false);

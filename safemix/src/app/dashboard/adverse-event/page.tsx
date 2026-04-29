@@ -16,7 +16,7 @@ import {
 import Link from "next/link";
 import { submitAdrReport, type AdrReport } from "@/lib/firebase/firestore";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
+import { trackEvent, AnalyticsEvents, getAnalyticsContext } from "@/lib/analytics";
 
 const SYSTEMS = ["Allopathic", "Ayurvedic", "Siddha", "Unani", "Homeopathy", "OTC", "Herbal", "Home Remedy"] as const;
 const ASU_H = new Set(["Ayurvedic", "Siddha", "Unani", "Homeopathy"]);
@@ -128,6 +128,7 @@ export default function AdverseEventPage() {
         seriousness: form.seriousness,
         forwardToAIIA: String(routing.forwardToAIIA),
         forwardToPvPI: String(routing.forwardToPvPI),
+        ...getAnalyticsContext(),
       });
       setSubmitted(true);
     } catch (e) {
